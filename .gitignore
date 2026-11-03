@@ -1,0 +1,6 @@
+.pio/
+.vscode/
+out/
+__pycache__/
+*.o
+sim
