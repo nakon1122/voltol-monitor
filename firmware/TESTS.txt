@@ -1,0 +1,6 @@
+proto_test: all passed
+drag worst split error: 0.0002 s
+GPS 25 Hz worst split error (with speed noise): 0.0208 s
+wheel spin 402 m error: raw 0.179 s, max-traction limited 0.012 s
+hybrid 402 m: 8.488 s (true 8.492)
+ride_test: all passed
