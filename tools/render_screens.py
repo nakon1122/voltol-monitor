@@ -120,7 +120,7 @@ def main():
     fonts = load_fonts()
     shots = replay(lines, fonts)
     for f in OUT.glob('*.png'):
-        if not f.name.startswith('web_'): f.unlink()
+        if not f.name.startswith(('web_', 's3web_')): f.unlink()
     for name, im in shots:
         im.resize((W * 2, H * 2), Image.NEAREST).save(OUT / f'{name}.png')
     # contact sheet

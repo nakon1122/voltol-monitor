@@ -27,7 +27,8 @@ const params = {
     F(0, 'Battery', 'Overvoltage', 'V', 1, 90, 90, 1), F(1, 'Battery', 'Undervoltage', 'V', 1, 60, 60, 1), F(4, 'Battery', 'Busbar current', 'A', 0, 180, 180, 1), F(5, 'Battery', 'Phase current', 'A', 0, 450, 450, 1),
     F(6, 'Sport', 'Sport current limit', 'A', 0, 45, 30, 1), F(9, 'Sport', 'Speed ratio', '%', 0, 60, 40, 1), F(10, 'Sport', 'Soft-start grade', '', 0, 16, 16, 1)],
 };
-const settings = { dash: 0, speedSrc: 2, logRate: 0, cells: 20, cellEmptyMv: 3000, cellFullMv: 4150, maxKmh: 120, maxAmp: 200, backlight: 4, wifi: 1, tzHours: 7, rollout: 0, gpsRate: 1, tyreW: 130, tyreA: 70, tyreR: 17, wheelCorr: 0, ratioX100: 100, circMm: 1928, kmhAt1000: 115.7, headless: false };
+const settings = { dash: 0, speedSrc: 2, logRate: 0, cells: 20, cellEmptyMv: 3000, cellFullMv: 4150, maxKmh: 120, maxAmp: 200, backlight: 4, wifi: 1, tzHours: 7, rollout: 0, gpsRate: 1, tyreW: 130, tyreA: 70, tyreR: 17, wheelCorr: 0, ratioX100: 100, maxG10: 16, circMm: 1928, kmhAt1000: 115.7, headless: false };
+let SET = settings;
 async function shot(page, name, liveObj, setup) {
   await page.route('**/*', r => {
     const u = new URL(r.request().url());
@@ -36,8 +37,8 @@ async function shot(page, name, liveObj, setup) {
     if (u.pathname === '/api/live') return json(liveObj);
     if (u.pathname === '/api/lists') return json(lists);
     if (u.pathname === '/api/params') return json(params);
-    if (u.pathname === '/api/settings') return json(settings);
-    if (u.pathname === '/api/ota') return json({ version: '1.2.0', netOn: true, ssid: 'Home-WiFi', connected: true, ip: '192.168.1.57', available: true, latest: '1.3.0', state: 0, progress: 0, msg: 'Version 1.3.0 available', rolledBack: false });
+    if (u.pathname === '/api/settings') return json(SET);
+    if (u.pathname === '/api/ota') return json({ version: '1.2.1', netOn: true, ssid: 'Home-WiFi', connected: true, ip: '192.168.1.57', available: true, latest: '1.3.0', state: 0, progress: 0, msg: 'Version 1.3.0 available', rolledBack: false });
     if (u.pathname === '/api/profile') return json({ p: [{ have: true, v: [40, 300, 16] }, { have: true, v: [18, 150, 10] }], names: ['Rate of rise', 'Start torque', 'Soft-start grade'], now: [40, 300, 16], have: true });
     if (u.pathname === '/api/files') return json([{ n: '/log/T0042_detail.csv', s: 212300 }, { n: '/log/T0042_sec.csv', s: 31800 }, { n: '/faults.csv', s: 4200 }, { n: '/trips.csv', s: 900 }, { n: '/drag.csv', s: 320 }]);
     return json({});
@@ -68,5 +69,19 @@ async function shot(page, name, liveObj, setup) {
   await shot(page, 'web_07_tune', live({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), tab('tune'));
   await shot(page, 'web_08_tune_confirm', live({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), async p => { await tab('tune')(p); await p.click('#pWrite'); });
   await shot(page, 'web_09_setup', live(), tab('setup'));
+  // ---- ESP32-S3 (no screen): the web page is the whole user interface
+  SET = { ...settings, headless: true };
+  const s3 = o => live({ fw: 'VOLTOL Monitor 1.2.1 (ESP32-S3)', ...o });
+  await shot(page, 's3web_01_dash_A', s3(), style(0));
+  await shot(page, 's3web_02_dash_B', s3({ kmh: 87, rpm: 752, amp: 132, kw: 10.1 }), style(1));
+  await shot(page, 's3web_03_dash_C', s3({ kmh: 105, rpm: 908, amp: 172, kw: 13.3, gear: 'S' }), style(2));
+  await shot(page, 's3web_04_drag_run', s3(run), async p => { await style(0)(p); await tab('drag')(p); });
+  await shot(page, 's3web_05_drag_result', s3(spinDone), tab('drag'));
+  await shot(page, 's3web_06_log', s3({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), tab('log'));
+  await shot(page, 's3web_07_tune', s3({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), tab('tune'));
+  await shot(page, 's3web_08_setup', s3(), tab('setup'));
+  const wide = await b.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+  const wp = await wide.newPage();
+  await shot(wp, 's3web_09_dash_desktop', s3(), async p => { await p.click('#styleSeg button[data-s="2"]'); });
   await b.close();
 })();
