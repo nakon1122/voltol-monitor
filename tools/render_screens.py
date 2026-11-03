@@ -119,7 +119,8 @@ def main():
         lines = subprocess.run([str(exe)], check=True, capture_output=True, text=True).stdout.splitlines()
     fonts = load_fonts()
     shots = replay(lines, fonts)
-    for f in OUT.glob('*.png'): f.unlink()
+    for f in OUT.glob('*.png'):
+        if not f.name.startswith('web_'): f.unlink()
     for name, im in shots:
         im.resize((W * 2, H * 2), Image.NEAREST).save(OUT / f'{name}.png')
     # contact sheet
