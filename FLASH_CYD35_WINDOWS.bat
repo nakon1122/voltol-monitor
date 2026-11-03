@@ -3,6 +3,7 @@ setlocal
 cd /d "%~dp0"
 echo VOLTOL Monitor - first install on ESP32-3248S035 (CYD 3.5 inch)
 echo This ERASES the board (settings, logs). For updates use UPDATE_CYD35_WINDOWS.bat
+echo Coming from v1.2.x: v1.3.0 needs this full install once (new flash layout).
 py -3.11 --version
 if errorlevel 1 goto failed
 py -3.11 -m esptool version >nul 2>nul

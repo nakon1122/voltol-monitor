@@ -22,8 +22,9 @@ static Rec g;
 static UiState s;
 static Settings cfg;
 static ride::DragTimer drag;
+static const char *prefix = "";
 static void shot(const char *name) {
-  printf("SCREEN %s\n", name);
+  printf("SCREEN %s%s\n", prefix, name);
   ui::draw(g, s, cfg);
 }
 static void live(float kmh) {
@@ -44,7 +45,8 @@ static ride::DragResult runResult(double a, double vmax, double tEnd, ride::Drag
   return d->r;
 }
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc > 1 && !strcmp(argv[1], "en")) { cfg.lang = 1; prefix = "en_"; }
   s.fw = "VOLTOL Monitor 1.0.0";
   strcpy(s.ssid, "VOLTOL-3F2A"); strcpy(s.ip, "http://192.168.4.1");
   s.heapKB = 142; s.fsFreeKB = 512; s.fsTotalKB = 640; strcpy(s.clock, "18:42");
@@ -176,7 +178,7 @@ int main() {
   ui::page = PG_WHEEL; shot("25_wheel");
   live(0); s.gpsSeen = true; s.gpsFix = true; s.gpsSats = 11; s.gpsHz = 10;
   s.netOn = true; s.netConnected = true; strcpy(s.netSsid, "Home-WiFi"); strcpy(s.netIp, "192.168.1.57");
-  s.updAvailable = true; strcpy(s.updLatest, "1.3.0"); strcpy(s.updMsg, "Version 1.3.0 available");
+  s.updAvailable = true; strcpy(s.updLatest, "1.3.0"); strcpy(s.updMsg, "Version 1.3.0 available"); s.updFmt = "Version %s available"; strcpy(s.updArg, "1.3.0");
   ui::page = PG_SETUP; shot("24_setup");
   ui::page = PG_INFO; shot("26_info_update");
   s.updState = 2; s.updProgress = 62; shot("27_info_downloading");

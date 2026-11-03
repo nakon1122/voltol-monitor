@@ -48,5 +48,11 @@ inline int cap(const uint8_t *f) {
 }
 }  // namespace vlw
 
-inline int Gfx::textWidth(const char *s, int font) { return vlw::width(FONT_VLW[font], s); }
+inline int Gfx::rawWidth(const char *s, int font) { return vlw::width(FONT_VLW[font], s); }
+inline int Gfx::textWidth(const char *s, int font) {
+  char buf[400];
+  if (fontThai(font)) s = T(s);
+  if (thai::needs(s)) s = thai::shape(s, buf, sizeof buf);
+  return vlw::width(FONT_VLW[font], s);
+}
 inline int Gfx::capHeight(int font) { return vlw::cap(FONT_VLW[font]); }

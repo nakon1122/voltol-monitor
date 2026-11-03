@@ -2,6 +2,7 @@
 setlocal
 cd /d "%~dp0"
 echo VOLTOL Monitor - update (keeps settings, logs, backups, touch calibration)
+echo From v1.2.x: use FLASH_CYD35_WINDOWS.bat once (v1.3.0 has a new flash layout).
 py -3.11 --version
 if errorlevel 1 goto failed
 py -3.11 -m esptool version >nul 2>nul

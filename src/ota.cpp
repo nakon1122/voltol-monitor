@@ -30,6 +30,11 @@ static volatile int request = 0;  // 1 check, 2 install
 static String wantSha, wantFile;
 static uint32_t wantSize = 0, lastCheck = 0, upSince = 0;
 static bool staWanted = false;
+static void say(const char *fmt, const char *arg = "") {
+  st.fmt = fmt;
+  strlcpy(st.arg, arg, sizeof st.arg);
+  snprintf(st.msg, sizeof st.msg, fmt, arg);
+}
 
 // ------------------------------------------------------------ rollback ----
 void bootCheck() {
@@ -127,35 +132,39 @@ static void doCheck() {
   long n = get(c, String(PATH) + "version.json");
   if (n < 0) {
     st.state = S_ERROR;
-    snprintf(st.msg, sizeof st.msg, n == -1 ? "Cannot reach GitHub" : "version.json not found");
+    say(n == -1 ? "Cannot reach GitHub" : "version.json not found");
     return;
   }
   String js = c.readString();
   c.stop();
   String ver = field(js, 0, "version");
   int b = js.indexOf(String("\"") + board + "\"");
-  if (!ver.length() || b < 0) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "Bad version.json"); return; }
+  if (!ver.length() || b < 0) { st.state = S_ERROR; say("Bad version.json"); return; }
   wantFile = field(js, b, "file");
   wantSha = field(js, b, "sha256");
   wantSize = field(js, b, "size").toInt();
   strlcpy(st.latest, ver.c_str(), sizeof st.latest);
   st.available = cmpVer(VOLTOL_FW, st.latest) < 0;
   st.state = S_IDLE;
-  snprintf(st.msg, sizeof st.msg, st.available ? "Version %s available" : "Up to date (%s)", st.latest);
+  say(st.available ? "Version %s available" : "Up to date (%s)", st.latest);
 }
 static void doInstall() {
   if (!st.available) doCheck();
   if (!st.available) return;
   const char *why = guard ? guard() : nullptr;
-  if (why) { st.state = S_ERROR; strlcpy(st.msg, why, sizeof st.msg); return; }
+  if (why) { st.state = S_ERROR; say(why); return; }
   st.state = S_DOWNLOADING;
   st.progress = 0;
   WiFiClientSecure c;
   long n = get(c, String(PATH) + wantFile);
   if (n <= 0 || (wantSize && (uint32_t)n != wantSize)) {
-    st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "Download failed (%ld)", n); c.stop(); return;
+    char a[16]; snprintf(a, sizeof a, "%ld", n);
+    st.state = S_ERROR; say("Download failed (%s)", a); c.stop(); return;
   }
-  if (!Update.begin(n)) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "No space for update"); c.stop(); return; }
+  if (!Update.begin(n)) {
+    // a bigger firmware than this board's partition table allows (older layout)
+    st.state = S_ERROR; say("Too big for this board: install once with USB (FLASH .bat)"); c.stop(); return;
+  }
   mbedtls_sha256_context sha;
   mbedtls_sha256_init(&sha);
   mbedtls_sha256_starts(&sha, 0);
@@ -180,13 +189,13 @@ static void doInstall() {
   if (done != n || wantSha != hex) {
     Update.abort();
     st.state = S_ERROR;
-    snprintf(st.msg, sizeof st.msg, done != n ? "Download interrupted" : "Checksum mismatch - not installed");
+    say(done != n ? "Download interrupted" : "Checksum mismatch - not installed");
     return;
   }
-  if (!Update.end(true)) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "Install failed"); return; }
+  if (!Update.end(true)) { st.state = S_ERROR; say("Install failed"); return; }
   markPending();
   st.state = S_RESTARTING;
-  snprintf(st.msg, sizeof st.msg, "Installed %s - restarting", st.latest);
+  say("Installed %s - restarting", st.latest);
   delay(1500);
   ESP.restart();
 }
@@ -195,7 +204,7 @@ static void task(void *) {
     if (request) {
       int r = request;
       request = 0;
-      if (!st.connected) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "No internet Wi-Fi connection"); }
+      if (!st.connected) { st.state = S_ERROR; say("No internet Wi-Fi connection"); }
       else if (r == 1) doCheck();
       else doInstall();
     }

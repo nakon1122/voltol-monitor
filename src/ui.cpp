@@ -2,6 +2,7 @@
 // board and, unchanged, for the PC preview renderer (tools/sim/sim_main.cpp).
 #include "ui.h"
 #include "vlw_metrics.h"
+#include "i18n.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -65,24 +66,24 @@ static void chip(Gfx &g, int x, int y, int w, const char *t, uint32_t bg, uint32
 
 // Live values as text ("--" while the controller is silent).
 struct Vals {
-  char kmh[8], rpm[8], volt[8], amp[8], kw[8], soc[8], tc[8], tm[8];
+  char kmh[24], rpm[24], volt[24], amp[24], kw[24], soc[24], tc[24], tm[24];
   bool ok;
 };
 static Vals vals(const UiState &s) {
   Vals v;
   v.ok = s.linked;
-  if (s.speedOk) snprintf(v.kmh, 8, "%d", (int)lroundf(s.kmh)); else strcpy(v.kmh, "--");
+  if (s.speedOk) snprintf(v.kmh, sizeof v.kmh, T("%d"), (int)lroundf(s.kmh)); else strcpy(v.kmh, "--");
   if (!s.linked) {
     for (char *p : {v.rpm, v.volt, v.amp, v.kw, v.soc, v.tc, v.tm}) strcpy(p, "--");
     return v;
   }
-  snprintf(v.rpm, 8, "%d", s.live.rpm);
+  snprintf(v.rpm, sizeof v.rpm, T("%d"), s.live.rpm);
   fmt1(v.volt, 8, s.live.volt);
   fmt1(v.amp, 8, s.live.amp);
-  snprintf(v.kw, 8, "%.2f", s.kw);
-  snprintf(v.soc, 8, "%d%%", s.soc);
-  snprintf(v.tc, 8, "%d", s.live.tCtrl);
-  snprintf(v.tm, 8, "%d", s.live.tMotor);
+  snprintf(v.kw, sizeof v.kw, T("%.2f"), s.kw);
+  snprintf(v.soc, sizeof v.soc, T("%d%%"), s.soc);
+  snprintf(v.tc, sizeof v.tc, T("%d"), s.live.tCtrl);
+  snprintf(v.tm, sizeof v.tm, T("%d"), s.live.tMotor);
   return v;
 }
 static void statusText(const UiState &s, char *out, uint32_t &col, uint32_t &bg) {
@@ -90,15 +91,27 @@ static void statusText(const UiState &s, char *out, uint32_t &col, uint32_t &bg)
   if (!s.linked) { strcpy(out, "NO LINK"); col = MUTED2; bg = CHIP; return; }
   if (s.live.faults) { strcpy(out, "FAULT"); col = TEXT; bg = RED; return; }
   uint8_t st = s.live.status < 8 ? s.live.status : 0;
-  snprintf(out, 12, "%s", STATUS_NAMES[st]);
+  snprintf(out, 36, T("%s"), STATUS_NAMES[st]);
   col = st == ST_RUN ? GREEN : st == ST_BRAKE ? BLUE : SUB;
   bg = st == ST_RUN ? DARKGREEN : CHIP;
 }
+// faultText with translated names
+static void faultTextT(uint32_t f, char *out, int cap) {
+  if (!f) { snprintf(out, cap, "%s", T("None")); return; }
+  int len = 0;
+  uint32_t known = 0;
+  for (int i = 0; i < FAULT_COUNT; i++)
+    if (f & FAULTS[i].mask) {
+      known |= FAULTS[i].mask;
+      len += snprintf(out + len, len < cap ? cap - len : 0, "%s%s", len ? ", " : "", T(FAULTS[i].name));
+    }
+  if (f & ~known && len < cap) snprintf(out + len, cap - len, "%s0x%08X", len ? ", " : "", (unsigned)(f & ~known));
+}
 static void faultLine(const UiState &s, char *out, int n) {
-  if (!s.linked && s.speedOk) { snprintf(out, n, "GPS only · %d sats · no controller", s.gpsSats); return; }
-  if (!s.linked) { snprintf(out, n, "Waiting for controller (%u baud)", (unsigned)s.baud); return; }
-  if (!s.live.faults) { snprintf(out, n, "No fault"); return; }
-  faultText(s.live.faults, out, n);
+  if (!s.linked && s.speedOk) { snprintf(out, n, T("GPS only · %d sats · no controller"), s.gpsSats); return; }
+  if (!s.linked) { snprintf(out, n, T("Waiting for controller (%u baud)"), (unsigned)s.baud); return; }
+  if (!s.live.faults) { snprintf(out, n, "%s", T("No fault")); return; }
+  faultTextT(s.live.faults, out, n);
 }
 static void gears(Gfx &g, int x, int y, int w, const UiState &s) {
   for (int i = 0; i < 4; i++) {
@@ -143,7 +156,7 @@ static float angA(const UiState &s, const Settings &c) {
 }
 static void dashA(Gfx &g, const UiState &s, const Settings &c, bool full) {
   Vals v = vals(s);
-  char st[16]; uint32_t sc, sb;
+  char st[48]; uint32_t sc, sb;
   statusText(s, st, sc, sb);
   if (full) {
     g.fillRect(0, 0, 480, 320, BG);
@@ -162,7 +175,7 @@ static void dashA(Gfx &g, const UiState &s, const Settings &c, bool full) {
       pt(AX, AY, AR - (big ? 24 : 19), a, x1, y1);
       g.drawLine(x0, y0, x1, y1, big ? 0x9AA7B3 : 0x3A4652);
       if (big) {
-        char t[8]; snprintf(t, 8, "%d", c.maxKmh * i / 12);
+        char t[24]; snprintf(t, sizeof t, T("%d"), c.maxKmh * i / 12);
         pt(AX, AY, AR - 36, a, x, y);
         g.textMid(x, y, t, F10, MUTED, AL_C);
       }
@@ -182,7 +195,7 @@ static void dashA(Gfx &g, const UiState &s, const Settings &c, bool full) {
     g.text(AX, AY + 20, v.kmh, s.kmh >= 99.5f ? F72B : F86B, s.speedOk ? TEXT : DIM, AL_C);
   });
   g.boxed(100, 258, 120, 22, BG, [&] {
-    char t[24]; snprintf(t, 24, "%s rpm", v.rpm);
+    char t[72]; snprintf(t, sizeof t, T("%s rpm"), v.rpm);
     g.text(AX, AY + 92, t, F13B, SUB, AL_C);
   });
   // right tiles
@@ -210,15 +223,15 @@ static void dashA(Gfx &g, const UiState &s, const Settings &c, bool full) {
     g.fillRoundRect(X, 234, W, 46, 8, CARD);
     g.text(X + 10, 250, "CTRL", F10, MUTED);
     g.text(X + 82, 250, "MOTOR", F10, MUTED);
-    char t[12];
-    snprintf(t, 12, "%s°C", v.tc); g.text(X + 10, 272, t, F18B, s.live.tCtrl > 80 ? RED : TEXT);
-    snprintf(t, 12, "%s°C", v.tm); g.text(X + 82, 272, t, F18B, s.live.tMotor > 100 ? RED : TEXT);
+    char t[36];
+    snprintf(t, sizeof t, T("%s°C"), v.tc); g.text(X + 10, 272, t, F18B, s.live.tCtrl > 80 ? RED : TEXT);
+    snprintf(t, sizeof t, T("%s°C"), v.tm); g.text(X + 82, 272, t, F18B, s.live.tMotor > 100 ? RED : TEXT);
   });
   g.boxed(0, 292, 480, 28, BG, [&] {
-    char t[64];
-    snprintf(t, 64, "TRIP %.1f km   ODO %.0f km", s.trip.distM / 1000, s.odoKm);
+    char t[192];
+    snprintf(t, sizeof t, T("TRIP %.1f km   ODO %.0f km"), s.trip.distM / 1000, s.odoKm);
     g.text(10, 310, t, F11, MUTED);
-    char f[96]; faultLine(s, f, sizeof f);
+    char f[256]; faultLine(s, f, sizeof f);
     g.text(470, 310, f, s.live.faults && s.linked ? F11B : F11, s.live.faults && s.linked ? RED : MUTED, AL_R);
   });
 }
@@ -242,10 +255,10 @@ static void dashB(Gfx &g, const UiState &s, const Settings &c, bool full) {
     g.fillRoundRect(8 + (int)(i * 15.47f), 8, 12, 16, 2, i < lit ? col : 0x141A20);
   }
   g.boxed(8, 28, 200, 16, BBG, [&] {
-    char t[24]; snprintf(t, 24, "RPM %s", v.rpm);
+    char t[72]; snprintf(t, sizeof t, T("RPM %s"), v.rpm);
     g.text(8, 40, t, F11B, SUB);
   });
-  char st[16]; uint32_t sc, sb;
+  char st[48]; uint32_t sc, sb;
   statusText(s, st, sc, sb);
   g.boxed(10, 56, 70, 120, BBG, [&] {
     g.fillRoundRect(10, 56, 70, 120, 10, 0x0E1318);
@@ -267,7 +280,7 @@ static void dashB(Gfx &g, const UiState &s, const Settings &c, bool full) {
     if (vy < zy) g.fillRect(bx, vy, 22, zy - vy, YELLOW);
     else if (vy > zy) g.fillRect(bx, zy, 22, vy - zy, GREEN);
     g.drawLine(bx - 4, zy, bx + 26, zy, MUTED2);
-    char t[8]; snprintf(t, 8, "%d", c.maxAmp);
+    char t[24]; snprintf(t, sizeof t, T("%d"), c.maxAmp);
     g.text(bx - 6, by + 9, t, F10, MUTED, AL_R);
     g.text(bx - 6, zy + 4, "0", F10, MUTED, AL_R);
     g.text(bx + 11, by + bh + 14, "AMP", F10, MUTED, AL_C);
@@ -279,11 +292,11 @@ static void dashB(Gfx &g, const UiState &s, const Settings &c, bool full) {
     g.boxed(x, 216, 112, 76, BBG, [&] {
       g.fillRoundRect(x, 216, 112, 76, 8, 0x0E1318);
       g.text(x + 10, 234, lab[i], F10, MUTED);
-      char val[16]; const char *u = ""; uint32_t col = TEXT;
+      char val[48]; const char *u = ""; uint32_t col = TEXT;
       if (i == 0) { strcpy(val, v.volt); u = "V"; }
       if (i == 1) { strcpy(val, v.amp); u = "A"; col = s.live.amp < 0 ? GREEN : YELLOW; }
       if (i == 2) { strcpy(val, v.kw); u = "kW"; col = BLUE; }
-      if (i == 3) { snprintf(val, 16, "%s/%s", v.tc, v.tm); u = "°C"; }
+      if (i == 3) { snprintf(val, sizeof val, T("%s/%s"), v.tc, v.tm); u = "°C"; }
       g.text(x + 10, 264, val, F24B, col);
       g.text(x + 13 + g.textWidth(val, F24B), 264, u, F13, MUTED2);
       if (i == 0) {
@@ -295,9 +308,9 @@ static void dashB(Gfx &g, const UiState &s, const Settings &c, bool full) {
     });
   }
   g.boxed(0, 298, 480, 22, BBG, [&] {
-    char t[64]; snprintf(t, 64, "TRIP %.1f km · ODO %.0f km", s.trip.distM / 1000, s.odoKm);
+    char t[192]; snprintf(t, sizeof t, T("TRIP %.1f km · ODO %.0f km"), s.trip.distM / 1000, s.odoKm);
     g.text(8, 312, t, F10, MUTED);
-    char f[96]; faultLine(s, f, sizeof f);
+    char f[256]; faultLine(s, f, sizeof f);
     g.text(472, 312, f, F10, s.live.faults && s.linked ? RED : MUTED, AL_R);
   });
 }
@@ -311,7 +324,7 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
     for (int i = 0; i < n; i++) {
       float a = 140 + 260 * (t[i] - vmin) / (vmax - vmin);
       int x, y; pt(cx, Y0, R - 20, a, x, y);
-      char b[8]; snprintf(b, 8, "%d", (int)t[i]);
+      char b[24]; snprintf(b, sizeof b, T("%d"), (int)t[i]);
       g.textMid(x, y, b, F10, 0x5E6C79, AL_C);
     }
   };
@@ -345,7 +358,7 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
   band(g, LX, Y0, R - 5, R + 5, 140, 400, full ? 140 : lastC1, a1, a1, TRACK, solidFill, &gcol);
   band(g, RX, Y0, R - 5, R + 5, 140, 400, full ? 140 : lastC2, full ? 400 : a2, a2, TRACK, solidFill, &acol, z2);
   lastC1 = a1; lastC2 = a2;
-  char st[16]; uint32_t sc, sb;
+  char st[48]; uint32_t sc, sb;
   statusText(s, st, sc, sb);
   g.boxed(190, 4, 100, 20, BAR, [&] {
     g.fillCircle(200, 14, 5, sc == SUB ? MUTED2 : sc == TEXT ? RED : sc);  // GPS = blue
@@ -354,14 +367,14 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
   g.boxed(356, 4, 116, 20, BAR, [&] { gears(g, 356, 5, 26, s); });
   g.boxed(LX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] { g.text(LX, Y0 + 14, v.kmh, s.kmh >= 99.5f ? F38B : F56B, s.speedOk ? TEXT : DIM, AL_C); });
   g.boxed(RX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] {
-    char t[8]; snprintf(t, 8, "%d", s.linked ? (int)lroundf(s.live.amp) : 0);
+    char t[24]; snprintf(t, sizeof t, T("%d"), s.linked ? (int)lroundf(s.live.amp) : 0);
     g.text(RX, Y0 + 14, s.linked ? t : "--", fabsf(s.live.amp) >= 99.5f ? F38B : F56B, s.linked ? TEXT : DIM, AL_C);
   });
   g.boxed(LX - 44, Y0 + 66, 88, 18, 0x0B1117, [&] {
-    char t[24]; snprintf(t, 24, "%s rpm", v.rpm); g.text(LX, Y0 + 80, t, F13B, SUB, AL_C);
+    char t[72]; snprintf(t, sizeof t, T("%s rpm"), v.rpm); g.text(LX, Y0 + 80, t, F13B, SUB, AL_C);
   });
   g.boxed(RX - 44, Y0 + 66, 88, 18, 0x0B1117, [&] {
-    char t[24]; snprintf(t, 24, "%s kW", v.kw); g.text(RX, Y0 + 80, t, F13B, BLUE, AL_C);
+    char t[72]; snprintf(t, sizeof t, T("%s kW"), v.kw); g.text(RX, Y0 + 80, t, F13B, BLUE, AL_C);
   });
   g.boxed(224, 64, 32, 126, BG, [&] {
     int fh = s.linked ? 118 * s.soc / 100 : 0;
@@ -369,11 +382,11 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
   });
   g.boxed(200, 196, 80, 44, BG, [&] {
     g.text(240, 214, v.soc, F15B, TEXT, AL_C);
-    char t[12]; snprintf(t, 12, "%s V", v.volt); g.text(240, 232, t, F13, SUB, AL_C);
+    char t[36]; snprintf(t, sizeof t, T("%s V"), v.volt); g.text(240, 232, t, F13, SUB, AL_C);
   });
-  char trip[16], odo[16], tc[12], tm[12], f[96];
-  snprintf(tc, 12, "%s°C", v.tc); snprintf(tm, 12, "%s°C", v.tm);
-  snprintf(trip, 16, "%.1f km", s.trip.distM / 1000); snprintf(odo, 16, "%.0f km", s.odoKm);
+  char trip[48], odo[48], tc[36], tm[36], f[256];
+  snprintf(tc, sizeof tc, T("%s°C"), v.tc); snprintf(tm, sizeof tm, T("%s°C"), v.tm);
+  snprintf(trip, sizeof trip, T("%.1f km"), s.trip.distM / 1000); snprintf(odo, sizeof odo, T("%.0f km"), s.odoKm);
   faultLine(s, f, sizeof f);
   const char *lab[5] = {"CTRL", "MOTOR", "TRIP", "ODO", "FAULT"};
   const char *val[5] = {tc, tm, trip, odo, s.live.faults && s.linked ? f : (s.linked ? "None" : "--")};
@@ -420,29 +433,29 @@ static void dragTop(Gfx &g, const UiState &s, const char *state, uint32_t col) {
   g.fillRoundRect(196, 5, 88, 18, 9, col);
   g.fillRoundRect(197, 6, 86, 16, 8, BAR);
   g.textMid(240, 14, state, F11B, col, AL_C);
-  char src[20];
-  snprintf(src, 20, s.src ? "SRC GPS %.0fHz" : "SRC RPM %.0fHz", s.src ? s.gpsHz : s.hz);
+  char src[60];
+  snprintf(src, sizeof src, s.src ? "SRC GPS %.0fHz" : "SRC RPM %.0fHz", s.src ? s.gpsHz : s.hz);
   chip(g, 330, 5, 78, src, 0x13202A, BLUE);
-  char gp[16];
-  if (s.gpsFix) snprintf(gp, 16, "GPS %d", s.gpsSats); else strcpy(gp, s.gpsSeen ? "GPS ..." : "GPS -");
+  char gp[48];
+  if (s.gpsFix) snprintf(gp, sizeof gp, T("GPS %d"), s.gpsSats); else strcpy(gp, s.gpsSeen ? "GPS ..." : "GPS -");
   chip(g, 412, 5, 60, gp, 0x161B21, s.gpsFix ? GREEN : DIM);
 }
 // One line under the big READY/STOP text describing source and launch rule.
 static void dragHint(Gfx &g, const UiState &s, const Settings &c, int state) {
   using ride::DragTimer;
-  char t[96];
-  const char *roll = c.rollout ? " · rollout 1 ft" : "";
+  char t[256];
+  const char *roll = c.rollout ? T(" · rollout 1 ft") : "";
   if (s.src) {
     if (state == DragTimer::ARMED && s.dragWaitGps)
-      snprintf(t, 96, "Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)", s.gpsSats, s.gpsSAcc);
-    else if (state == DragTimer::ARMED) snprintf(t, 96, "GPS: hold still for 1 s%s", roll);
+      snprintf(t, sizeof t, T("Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)"), s.gpsSats, s.gpsSAcc);
+    else if (state == DragTimer::ARMED) snprintf(t, sizeof t, T("GPS: hold still for 1 s%s"), roll);
     else if (state == DragTimer::READY)
-      snprintf(t, 96, s.linked ? "HYBRID: launch from RPM, distance from GPS %.0f Hz%s" : "GPS %.0f Hz · starts above 3 km/h%s", s.gpsHz, roll);
-    else snprintf(t, 96, "GPS %.0f Hz · %d sats · ±%.1f km/h%s", s.gpsHz, s.gpsSats, s.gpsSAcc, roll);
+      snprintf(t, sizeof t, s.linked ? T("HYBRID: launch from RPM, distance from GPS %.0f Hz%s") : T("GPS %.0f Hz · starts above 3 km/h%s"), s.gpsHz, roll);
+    else snprintf(t, sizeof t, T("GPS %.0f Hz · %d sats · ±%.1f km/h%s"), s.gpsHz, s.gpsSats, s.gpsSAcc, roll);
   } else {
-    if (state == DragTimer::ARMED) snprintf(t, 96, "Bring the bike to a full stop (0 RPM)%s", roll);
-    else if (state == DragTimer::READY) snprintf(t, 96, "0 RPM · Timer starts when the wheel turns%s", roll);
-    else snprintf(t, 96, "Press ARM, then launch from a standstill%s", roll);
+    if (state == DragTimer::ARMED) snprintf(t, sizeof t, T("Bring the bike to a full stop (0 RPM)%s"), roll);
+    else if (state == DragTimer::READY) snprintf(t, sizeof t, T("0 RPM · Timer starts when the wheel turns%s"), roll);
+    else snprintf(t, sizeof t, T("Press ARM, then launch from a standstill%s"), roll);
   }
   g.text(240, 114, t, F13, s.dragWaitGps ? YELLOW : SUB, AL_C);
 }
@@ -465,15 +478,15 @@ static void splitTable(Gfx &g, int y, const ride::DragResult &r, const ride::Dra
     int yy = y + 38 + i * 24;
     const ride::Split &sp = r.s[i];
     g.text(cols[0], yy, ride::SPLIT_NAME[i], F13, TEXT);
-    char t[24];
+    char t[72];
     if (!sp.done) { g.text(cols[1], yy, "—", F13, MUTED); g.text(cols[2], yy, "—", F13, MUTED); continue; }
-    snprintf(t, 24, "%.2f s", sp.t); g.text(cols[1], yy, t, F15B, TEXT);
-    snprintf(t, 24, "%.1f km/h", sp.trapKmh); g.text(cols[2], yy, t, F13, TEXT);
+    snprintf(t, sizeof t, T("%.2f s"), sp.t); g.text(cols[1], yy, t, F15B, TEXT);
+    snprintf(t, sizeof t, T("%.1f km/h"), sp.trapKmh); g.text(cols[2], yy, t, F13, TEXT);
     if (best && best->s[i].done) {
       double d = sp.t - best->s[i].t;
-      snprintf(t, 24, "%+.2f", d); g.text(cols[3], yy, t, F13B, d <= 0 ? GREEN : RED);
+      snprintf(t, sizeof t, T("%+.2f"), d); g.text(cols[3], yy, t, F13B, d <= 0 ? GREEN : RED);
     }
-    if (peak) { snprintf(t, 24, "%.0f A", sp.peakA); g.text(cols[4], yy, t, F13, TEXT); }
+    if (peak) { snprintf(t, sizeof t, T("%.0f A"), sp.peakA); g.text(cols[4], yy, t, F13, TEXT); }
   }
 }
 static int lastDragState = -1;
@@ -490,22 +503,22 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
       button(g, {10, 282, 460, 30}, "ABORT", DARKRED, RED);
     }
     g.boxed(10, 34, 300, 70, BG, [&] {
-      char t[16]; snprintf(t, 16, "%.2f", d.elapsed(s.now));
+      char t[48]; snprintf(t, sizeof t, T("%.2f"), d.elapsed(s.now));
       g.text(20, 96, t, F72B, TEXT);
       g.text(26 + g.textWidth(t, F72B), 96, "s", F24B, MUTED2);
     });
     g.boxed(320, 44, 150, 60, BG, [&] {
       g.text(460, 62, "SPEED", F10, MUTED, AL_R);
-      char t[16]; fmt1(t, 16, d.speedKmh());
+      char t[48]; fmt1(t, 16, d.speedKmh());
       int w = g.textWidth(" km/h", F13);
       g.text(460 - w, 96, t, F38B, TEXT, AL_R);
       g.text(460, 96, " km/h", F13, MUTED2, AL_R);
     });
     g.boxed(10, 106, 460, 54, BG, [&] {
-      char t[80];
-      if (s.slipOk) snprintf(t, 80, "Distance %.1f m  ·  %.0f A  ·  slip %.0f%%", d.distance(), s.live.amp, s.slipPct);
-    else if (s.linked) snprintf(t, 80, "Distance %.1f m  ·  %.0f A  ·  %.1f kW", d.distance(), s.live.amp, s.kw);
-    else snprintf(t, 80, "Distance %.1f m  ·  GPS %d sats", d.distance(), s.gpsSats);
+      char t[240];
+      if (s.slipOk) snprintf(t, sizeof t, T("Distance %.1f m  ·  %.0f A  ·  slip %.0f%%"), d.distance(), s.live.amp, s.slipPct);
+    else if (s.linked) snprintf(t, sizeof t, T("Distance %.1f m  ·  %.0f A  ·  %.1f kW"), d.distance(), s.live.amp, s.kw);
+    else snprintf(t, sizeof t, T("Distance %.1f m  ·  GPS %d sats"), d.distance(), s.gpsSats);
       g.text(20, 120, t, F13, SUB);
       track(g, 128, d.distance());
     });
@@ -516,11 +529,11 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
     if (d.state == DragTimer::ARMED || d.state == DragTimer::READY || d.state == DragTimer::IDLE)
       g.boxed(0, 100, 480, 42, BG, [&] {
         dragHint(g, s, c, d.state);
-        char t[64];
+        char t[192];
         if (s.linked)
-          snprintf(t, 64, "%.1f V · %d%% · CTRL %d°C · Gear %c · %d rpm", s.live.volt, s.soc, s.live.tCtrl,
+          snprintf(t, sizeof t, T("%.1f V · %d%% · CTRL %d°C · Gear %c · %d rpm"), s.live.volt, s.soc, s.live.tCtrl,
                    GEAR_CH[s.live.gear()], s.live.rpm);
-        else snprintf(t, 64, "%.1f km/h · no controller connected", s.kmh);
+        else snprintf(t, sizeof t, T("%.1f km/h · no controller connected"), s.kmh);
         g.text(240, 134, t, F11, MUTED, AL_C);
       });
     return;
@@ -529,16 +542,16 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
   if (d.state == DragTimer::DONE || d.state == DragTimer::ABORTED) {
     bool done = d.state == DragTimer::DONE;
     dragTop(g, s, done ? "FINISHED" : "ABORTED", done ? BLUE : RED);
-    char t[48];
+    char t[144];
     const ride::Split &last = d.r.s[ride::SPLITS - 1];
     if (done) {
-      snprintf(t, 48, "%.2f", last.t);
+      snprintf(t, sizeof t, T("%.2f"), last.t);
       g.text(20, 84, t, F56B, TEXT);
       g.text(26 + g.textWidth(t, F56B), 84, "s", F24B, MUTED2);
-      snprintf(t, 48, "402 m @ %.1f km/h", last.trapKmh);
+      snprintf(t, sizeof t, T("402 m @ %.1f km/h"), last.trapKmh);
       g.text(20, 108, t, F13B, TEXT);
       if (!d.r.spinCorrected && best && (!best->finished() || last.t < best->s[3].t)) {
-        snprintf(t, 48, best->finished() ? "★ NEW BEST %+.2f" : "★ NEW BEST", best->finished() ? last.t - best->s[3].t : 0.0);
+        snprintf(t, sizeof t, best->finished() ? T("★ NEW BEST %+.2f") : T("★ NEW BEST"), best->finished() ? last.t - best->s[3].t : 0.0);
         g.fillRoundRect(330, 46, 140, 30, 15, YELLOW);
         g.textMid(400, 61, t, F13B, 0x000000, AL_C);
       }
@@ -546,17 +559,17 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
       g.text(20, 84, "ABORTED", F38B, RED);
       g.text(20, 108, "Run stopped before 402 m", F13, SUB);
     }
-    if (d.r.peakA > 0) snprintf(t, 48, "Peak %.0f A · %.1f kW · min %.1f V", d.r.peakA, d.r.peakKw, d.r.minV);
-    else snprintf(t, 48, "no controller data");
+    if (d.r.peakA > 0) snprintf(t, sizeof t, T("Peak %.0f A · %.1f kW · min %.1f V"), d.r.peakA, d.r.peakKw, d.r.minV);
+    else snprintf(t, sizeof t, "%s", T("no controller data"));
     g.text(470, 96, t, F10, MUTED, AL_R);
-    snprintf(t, 48, "%s%s", s.src ? "GPS timing" : "RPM timing ±0.05 s", c.rollout ? " · 1 ft rollout" : "");
+    snprintf(t, sizeof t, T("%s%s"), s.src ? T("GPS timing") : T("RPM timing ±0.05 s"), c.rollout ? T(" · 1 ft rollout") : "");
     g.text(470, 110, t, F10, MUTED, AL_R);
     if (d.r.spinCorrected) {
       g.fillRoundRect(330, 46, 140, 30, 15, DARKRED);
       g.textMid(400, 61, "SPIN-CORRECTED", F13B, RED, AL_C);
       g.text(470, 124, "Not counted as best run", F10, RED, AL_R);
     } else if (d.r.maxSlip > 5) {
-      snprintf(t, 48, "Max wheel slip %.0f%% (GPS)", d.r.maxSlip);
+      snprintf(t, sizeof t, T("Max wheel slip %.0f%% (GPS)"), d.r.maxSlip);
       g.text(470, 124, t, F10, YELLOW, AL_R);
     } else if (d.r.wheelspin) g.text(470, 124, "Wheel spin detected", F10, YELLOW, AL_R);
     splitTable(g, 128, d.r, best, d.r.peakA > 0, "SPLIT");
@@ -593,25 +606,25 @@ static void dragHist(Gfx &g, const UiState &s) {
     int y = 76 + r * 26;
     if (r % 2 == 0) g.fillRect(6, y - 17, 468, 24, CARD2);
     g.text(cols[0], y, d.when, F11, SUB);
-    char t[16];
+    char t[48];
     for (int i = 0; i < 4; i++) {
-      if (d.t[i] > 0) snprintf(t, 16, "%.2f", d.t[i]); else strcpy(t, "—");
+      if (d.t[i] > 0) snprintf(t, sizeof t, T("%.2f"), d.t[i]); else strcpy(t, "—");
       g.text(cols[i + 1], y, t, i == 3 ? F13B : F13, TEXT);
     }
-    snprintf(t, 16, "%.1f", d.trap[3]); g.text(cols[5], y, t, F13, TEXT);
+    snprintf(t, sizeof t, T("%.1f"), d.trap[3]); g.text(cols[5], y, t, F13, TEXT);
   }
 }
 
 // ============================================================ LOG =========
 static const Btn LB[3] = {{10, 282, 148, 30}, {166, 282, 148, 30}, {322, 282, 148, 30}};
 static void logPage(Gfx &g, const UiState &s, const Settings &c) {
-  char r[48];
-  snprintf(r, 48, "%s", s.sd ? "SD card" : "internal");
+  char r[144];
+  snprintf(r, sizeof r, T("%s"), s.sd ? T("SD card") : T("internal"));
   header(g, "LOG", r);
-  char t[96];
-  snprintf(t, 96, "Storage: %s · %u KB free of %u KB · rate %s", s.sd ? "SD card" : "internal flash",
-           (unsigned)s.fsFreeKB, (unsigned)s.fsTotalKB, c.logRate ? "" : "max");
-  if (c.logRate) snprintf(t, 96, "Storage: %s · %u KB free of %u KB · %u Hz", s.sd ? "SD card" : "internal flash",
+  char t[256];
+  snprintf(t, sizeof t, T("Storage: %s · %u KB free of %u KB · rate %s"), s.sd ? T("SD card") : T("internal flash"),
+           (unsigned)s.fsFreeKB, (unsigned)s.fsTotalKB, c.logRate ? "" : T("max"));
+  if (c.logRate) snprintf(t, sizeof t, T("Storage: %s · %u KB free of %u KB · %u Hz"), s.sd ? T("SD card") : T("internal flash"),
                           (unsigned)s.fsFreeKB, (unsigned)s.fsTotalKB, LOG_RATES[c.logRate]);
   g.text(14, 52, t, F11, SUB);
   // current trip card
@@ -622,7 +635,7 @@ static void logPage(Gfx &g, const UiState &s, const Settings &c) {
   float val[6] = {(float)(tr.distM / 1000), tr.maxKmh, tr.avgKmh(), tr.maxA, (float)tr.wh, tr.whPerKm()};
   for (int i = 0; i < 6; i++) {
     int x = 22 + i * 76;
-    char b[16]; snprintf(b, 16, i == 0 ? "%.2f" : "%.0f", val[i]);
+    char b[48]; snprintf(b, sizeof b, i == 0 ? "%.2f" : "%.0f", val[i]);
     g.text(x, 104, b, F18B, i == 3 ? YELLOW : TEXT);
     g.text(x, 115, lab[i], F10, MUTED);
   }
@@ -632,10 +645,10 @@ static void logPage(Gfx &g, const UiState &s, const Settings &c) {
     const TripRow &x = s.trips[i];
     int y = 160 + i * 24;
     if (i % 2 == 0) g.fillRect(6, y - 16, 468, 23, CARD2);
-    char b[96];
-    snprintf(b, 96, "#%u", x.id); g.text(14, y, b, F13B, TEXT);
+    char b[256];
+    snprintf(b, sizeof b, T("#%u"), x.id); g.text(14, y, b, F13B, TEXT);
     g.text(56, y, x.when, F11, SUB);
-    snprintf(b, 96, "%.1f km · %.0f km/h · %.0f A · %.0f Wh/km", x.km, x.maxKmh, x.maxA, x.whKm);
+    snprintf(b, sizeof b, T("%.1f km · %.0f km/h · %.0f A · %.0f Wh/km"), x.km, x.maxKmh, x.maxA, x.whKm);
     g.text(466, y, b, F11, TEXT, AL_R);
   }
   button(g, LB[0], "GRAPH"); button(g, LB[1], "FAULTS"); button(g, LB[2], "NEW TRIP");
@@ -652,9 +665,9 @@ static void graphPage(Gfx &g, const UiState &s) {
   for (int i = 0; i <= 4; i++) {
     int y = Y + H - H * i / 4;
     g.drawLine(X, y, X + W, y, 0x1C2630);
-    char b[12];
-    snprintf(b, 12, "%.0f", mk * i / 4); g.text(X - 4, y + 4, b, F10, GREEN, AL_R);
-    snprintf(b, 12, "%.0f", mi + (ma - mi) * i / 4); g.text(X + W + 4, y + 4, b, F10, YELLOW);
+    char b[36];
+    snprintf(b, sizeof b, T("%.0f"), mk * i / 4); g.text(X - 4, y + 4, b, F10, GREEN, AL_R);
+    snprintf(b, sizeof b, T("%.0f"), mi + (ma - mi) * i / 4); g.text(X + W + 4, y + 4, b, F10, YELLOW);
   }
   for (int i = 1; i < s.gN; i++) {
     int x0 = X + W * (i - 1) / (s.gN > 1 ? s.gN - 1 : 1), x1 = X + W * i / (s.gN > 1 ? s.gN - 1 : 1);
@@ -667,7 +680,7 @@ static void graphPage(Gfx &g, const UiState &s) {
   if (s.gN < 2) g.text(240, 160, "Not enough data yet", F13, MUTED, AL_C);
   g.fillCircle(20, 296, 4, GREEN); g.text(30, 300, "km/h (left)", F11, SUB);
   g.fillCircle(140, 296, 4, YELLOW); g.text(150, 300, "current A (right)", F11, SUB);
-  char b[48]; snprintf(b, 48, "%d s shown", s.gN); g.text(470, 300, b, F11, MUTED, AL_R);
+  char b[144]; snprintf(b, sizeof b, T("%d s shown"), s.gN); g.text(470, 300, b, F11, MUTED, AL_R);
 }
 static const Btn FB = {322, 282, 148, 30};
 static void faultsPage(Gfx &g, const UiState &s) {
@@ -681,15 +694,15 @@ static void faultsPage(Gfx &g, const UiState &s) {
     int y = 76 + i * 25;
     if (i % 2 == 0) g.fillRect(6, y - 17, 468, 24, CARD2);
     g.text(cols[0], y, f.when, F11, SUB);
-    char t[96], n[80];
-    faultText(f.code, n, sizeof n);
-    snprintf(t, 96, "%s %s", f.set ? "●" : "○", f.set ? n : "cleared");
+    char t[256], n[240];
+    faultTextT(f.code, n, sizeof n);
+    snprintf(t, sizeof t, T("%s %s"), f.set ? "●" : "○", f.set ? n : T("cleared"));
     g.text(cols[1], y, t, F11B, f.set ? RED : GREEN);
-    snprintf(t, 16, "%.0f", f.kmh); g.text(cols[2], y, t, F11, TEXT);
-    snprintf(t, 16, "%.0f", f.amp); g.text(cols[3], y, t, F11, TEXT);
-    snprintf(t, 16, "%.1f", f.volt); g.text(cols[4], y, t, F11, TEXT);
+    snprintf(t, sizeof t, T("%.0f"), f.kmh); g.text(cols[2], y, t, F11, TEXT);
+    snprintf(t, sizeof t, T("%.0f"), f.amp); g.text(cols[3], y, t, F11, TEXT);
+    snprintf(t, sizeof t, T("%.1f"), f.volt); g.text(cols[4], y, t, F11, TEXT);
   }
-  char now[96]; faultLine(s, now, sizeof now);
+  char now[256]; faultLine(s, now, sizeof now);
   g.text(14, 300, "Now:", F11, MUTED);
   g.text(50, 300, now, F11B, s.live.faults ? RED : GREEN);
   button(g, FB, "CLEAR FAULTS", s.live.faults ? DARKRED : CHIP, s.live.faults ? RED : MUTED2);
@@ -703,24 +716,26 @@ static int changedCount(const UiState &s) {
     if (getRaw(s.edit, PARAMS[i]) != getRaw(s.params.b, PARAMS[i])) n++;
   return n;
 }
+static bool showAdv = false;
 static int groupFields(int grp, int *idx) {
   int n = 0;
   for (int i = 0; i < PARAM_COUNT; i++)
-    if (!strcmp(PARAMS[i].group, GROUPS[grp])) idx[n++] = i;
+    if (!strcmp(PARAMS[i].group, GROUPS[grp]) && (showAdv || !PARAMS[i].adv)) idx[n++] = i;
   return n;
 }
+static const Btn ADV_BTN = {360, 0, 120, 32};
 static const Btn TB[3] = {{10, 282, 148, 30}, {166, 282, 148, 30}, {322, 282, 148, 30}};
 static Btn groupBtn(int i) { return {10 + (i % 3) * 154, 102 + (i / 3) * 62, 146, 56}; }
 static const Btn LAUNCH_BAR = {10, 228, 460, 46};
 static void tunePage(Gfx &g, const UiState &s) {
-  header(g, "TUNE CONTROLLER");
+  header(g, "TUNE CONTROLLER", showAdv ? "ADVANCED: ON" : "ADVANCED: OFF", showAdv ? YELLOW : MUTED2);
   bool have = s.params.complete();
   g.fillRoundRect(10, 40, 460, 56, 8, CARD);
-  char t[96];
+  char t[256];
   if (have) {
-    snprintf(t, 96, "Parameters read %s · check %05X", s.paramsWhen, (unsigned)s.params.checkSum());
+    snprintf(t, sizeof t, T("Parameters read %s · check %05X"), s.paramsWhen, (unsigned)s.params.checkSum());
     g.text(22, 60, t, F13B, TEXT);
-    snprintf(t, 96, s.backupN ? "Backup #%u saved before any change · %d backups kept" : "No backup yet", s.backupN ? s.backups[0].id : 0, s.backupN);
+    snprintf(t, sizeof t, s.backupN ? T("Backup #%u saved before any change · %d backups kept") : T("No backup yet"), s.backupN ? s.backups[0].id : 0, s.backupN);
     g.text(22, 82, t, F11, s.backupN ? GREEN : YELLOW);
   } else {
     g.text(22, 60, s.busy ? "Reading parameters..." : "Parameters not read yet", F13B, s.busy ? YELLOW : TEXT);
@@ -737,8 +752,8 @@ static void tunePage(Gfx &g, const UiState &s) {
       if (getRaw(s.edit, PARAMS[idx[k]]) != getRaw(s.params.b, PARAMS[idx[k]])) ch++;
     g.fillRoundRect(b.x, b.y, b.w, b.h, 8, have ? CHIP : CARD2);
     g.text(b.x + 12, b.y + 24, GROUPS[i], F15B, have ? TEXT : DIM);
-    char c[32]; snprintf(c, 32, "%d settings", n);
-    if (ch) snprintf(c, 32, "%d settings · %d changed", n, ch);
+    char c[96]; snprintf(c, sizeof c, T("%d settings"), n);
+    if (ch) snprintf(c, sizeof c, T("%d settings · %d changed"), n, ch);
     g.text(b.x + 12, b.y + 44, c, F10, ch ? YELLOW : MUTED);
   }
   g.fillRoundRect(LAUNCH_BAR.x, LAUNCH_BAR.y, LAUNCH_BAR.w, LAUNCH_BAR.h, 8, have ? 0x1A1408 : CARD2);
@@ -748,7 +763,7 @@ static void tunePage(Gfx &g, const UiState &s) {
   int ch = changedCount(s);
   button(g, TB[0], s.busy ? "READING..." : "READ", s.busy ? CARD2 : CHIP, TEXT);
   button(g, TB[1], "BACKUPS");
-  char w[24]; snprintf(w, 24, ch ? "WRITE (%d)" : "WRITE", ch);
+  char w[72]; snprintf(w, sizeof w, ch ? T("WRITE (%d)") : T("WRITE"), ch);
   button(g, TB[2], w, ch ? YELLOW : CARD2, ch ? 0x000000 : DIM);
 }
 static const Btn EB_MINUS = {346, 158, 58, 46}, EB_PLUS = {412, 158, 58, 46}, EB_STEP = {346, 212, 58, 30},
@@ -769,13 +784,13 @@ static void editPage(Gfx &g, const UiState &s) {
     g.fillRoundRect(10, y, 326, 30, 6, sel ? 0x13202A : CARD2);
     if (sel) g.drawRoundRect(10, y, 326, 30, 6, BLUE);
     g.textMid(20, y + 15, d.name, F13, TEXT);
-    char v[24], u[32];
+    char v[72], u[96];
     formatValue(s.edit, d, v, sizeof v);
-    snprintf(u, 32, "%s %s", v, d.unit);
+    snprintf(u, sizeof u, T("%s %s"), v, d.unit);
     g.textMid(326, y + 15, u, F13B, ch ? YELLOW : TEXT, AL_R);
   }
   if (n > ROWS) {
-    char p[40]; snprintf(p, 40, "%d-%d / %d", editTop + 1, editTop + ROWS < n ? editTop + ROWS : n, n);
+    char p[120]; snprintf(p, sizeof p, T("%d-%d / %d"), editTop + 1, editTop + ROWS < n ? editTop + ROWS : n, n);
     g.text(14, 300, p, F11, MUTED);
     button(g, {190, 282, 70, 30}, "UP"); button(g, EB_UP, "DOWN");
   }
@@ -783,15 +798,15 @@ static void editPage(Gfx &g, const UiState &s) {
   const ParamDef &d = PARAMS[idx[editSel]];
   g.fillRoundRect(346, 40, 124, 110, 8, CARD);
   g.text(354, 58, d.name, F10, MUTED);
-  char v[24]; formatValue(s.edit, d, v, sizeof v);
+  char v[72]; formatValue(s.edit, d, v, sizeof v);
   g.text(408, 104, v, strlen(v) > 5 ? F24B : F38B, getRaw(s.edit, d) != getRaw(s.params.b, d) ? YELLOW : TEXT, AL_C);
   g.text(408, 124, d.unit, F13, MUTED2, AL_C);
-  char was[32], o[24]; formatValue(s.params.b, d, o, sizeof o);
-  snprintf(was, 32, "was %s", o);
+  char was[96], o[72]; formatValue(s.params.b, d, o, sizeof o);
+  snprintf(was, sizeof was, T("was %s"), o);
   g.text(408, 142, was, F10, MUTED, AL_C);
   button(g, EB_MINUS, "-", CHIP, TEXT, F24B);
   button(g, EB_PLUS, "+", CHIP, TEXT, F24B);
-  char st[16]; snprintf(st, 16, "x%d", editStep);
+  char st[48]; snprintf(st, sizeof st, T("x%d"), editStep);
   button(g, EB_STEP, st, CHIP, BLUE);
   button(g, EB_RESET, "UNDO", CHIP, MUTED2);
   button(g, EB_DONE, "DONE", 0x13202A, BLUE);
@@ -804,21 +819,21 @@ static void confirmPage(Gfx &g, const UiState &s) {
   for (int i = 0; i < PARAM_COUNT && shown < 6; i++) {
     const ParamDef &d = PARAMS[i];
     if (getRaw(s.edit, d) == getRaw(s.params.b, d)) continue;
-    char a[24], b[24], t[64];
+    char a[72], b[72], t[192];
     formatValue(s.params.b, d, a, sizeof a); formatValue(s.edit, d, b, sizeof b);
     if (shown % 2 == 0) g.fillRect(6, y - 15, 468, 22, CARD2);
     g.text(14, y, d.group, F11, MUTED);
     g.text(100, y, d.name, F13, TEXT);
-    snprintf(t, 64, "%s  >  %s %s", a, b, d.unit);
+    snprintf(t, sizeof t, T("%s  >  %s %s"), a, b, d.unit);
     g.text(466, y, t, F13B, YELLOW, AL_R);
     y += 22; shown++;
   }
-  if (n > shown) { char t[32]; snprintf(t, 32, "+ %d more", n - shown); g.text(14, y, t, F11, MUTED); }
+  if (n > shown) { char t[96]; snprintf(t, sizeof t, T("+ %d more"), n - shown); g.text(14, y, t, F11, MUTED); }
   g.fillRoundRect(10, 214, 460, 58, 8, 0x1A1408);
   bool stopped = s.linked && s.live.rpm == 0;
   g.text(22, 234, stopped ? "Bike stopped (0 RPM)" : "Stop the bike first: writing needs 0 RPM", F13B, stopped ? GREEN : RED);
-  char t[96];
-  snprintf(t, 96, "A backup of the current values is kept (#%u). Values are read back to verify.", s.backupN ? s.backups[0].id : 0);
+  char t[256];
+  snprintf(t, sizeof t, T("A backup of the current values is kept (#%u). Values are read back to verify."), s.backupN ? s.backups[0].id : 0);
   g.text(22, 256, t, F11, SUB);
   if (s.msg[0]) g.text(240, 300, s.msg, F11B, s.msgKind == 1 ? GREEN : s.msgKind == 2 ? RED : YELLOW, AL_C);
   button(g, CB_CANCEL, "CANCEL");
@@ -835,10 +850,10 @@ static void backupsPage(Gfx &g, const UiState &s) {
     bool sel = i == backupSel;
     g.fillRoundRect(10, y, 460, 24, 5, sel ? 0x13202A : (i % 2 ? BG : CARD2));
     if (sel) g.drawRoundRect(10, y, 460, 24, 5, BLUE);
-    char t[48];
-    snprintf(t, 48, "#%u", b.id); g.textMid(22, y + 12, t, F13B, TEXT);
+    char t[144];
+    snprintf(t, sizeof t, T("#%u"), b.id); g.textMid(22, y + 12, t, F13B, TEXT);
     g.textMid(70, y + 12, b.when, F13, SUB);
-    snprintf(t, 48, "check %05X", (unsigned)b.sum); g.textMid(260, y + 12, t, F11, MUTED);
+    snprintf(t, sizeof t, T("check %05X"), (unsigned)b.sum); g.textMid(260, y + 12, t, F11, MUTED);
     if (s.params.complete() && b.sum == s.params.checkSum()) g.textMid(458, y + 12, "= controller", F11B, GREEN, AL_R);
   }
   button(g, BB_RESTORE, "RESTORE", backupSel >= 0 ? YELLOW : CARD2, backupSel >= 0 ? 0x000000 : DIM);
@@ -868,11 +883,11 @@ static void launchPage(Gfx &g, const UiState &s) {
     for (int p = 0; p < 2; p++) {
       bool sel = profSel == p * 3 + f;
       if (sel) g.drawRoundRect(cx[p] - 64, y + 3, 70, 26, 5, BLUE);
-      char t[16];
-      if (s.prof.have[p]) snprintf(t, 16, "%ld", (long)s.prof.v[p][f]); else strcpy(t, "-");
+      char t[48];
+      if (s.prof.have[p]) snprintf(t, sizeof t, T("%ld"), (long)s.prof.v[p][f]); else strcpy(t, "-");
       g.textMid(cx[p], y + 16, t, F13B, p ? YELLOW : TEXT, AL_R);
     }
-    char now[16]; snprintf(now, 16, "%ld", (long)getRaw(s.params.b, d));
+    char now[48]; snprintf(now, sizeof now, T("%ld"), (long)getRaw(s.params.b, d));
     g.textMid(330, y + 16, now, F13, MUTED2, AL_R);
   }
   int p = profSel / 3, f = profSel % 3;
@@ -891,49 +906,52 @@ static void launchPage(Gfx &g, const UiState &s) {
 
 // ============================================================ SETUP =======
 struct Row { const char *name; };
-static const int NSROW = 14;
-static const char *const SROW[NSROW] = {"Dashboard", "Speed source", "Log rate", "Battery cells", "Cell empty/full",
+static const int NSROW = 15;
+static const char *const SROW[NSROW] = {"Language", "Dashboard", "Speed source", "Log rate", "Battery cells", "Cell empty/full",
                                         "Gauge max km/h", "Gauge max A", "Backlight", "Wi-Fi hotspot", "Time zone (UTC)",
                                         "Drag rollout", "GPS rate", "Max traction (spin)", "Internet Wi-Fi"};
 static const char *netName = "";
 static void setupValue(const Settings &c, int i, char *t) {
   switch (i) {
-  case 0: snprintf(t, 24, "%s", DASH_NAME[c.dash]); break;
-  case 1: snprintf(t, 24, "%s", c.speedSrc == 0 ? "RPM" : c.speedSrc == 1 ? "GPS" : "AUTO"); break;
-  case 2: if (c.logRate) snprintf(t, 24, "%u Hz", LOG_RATES[c.logRate]); else strcpy(t, "MAX"); break;
-  case 3: snprintf(t, 24, "%uS", c.cells); break;
-  case 4: snprintf(t, 24, "%.2f/%.2f", c.cellEmptyMv / 1000.0, c.cellFullMv / 1000.0); break;
-  case 5: snprintf(t, 24, "%u", c.maxKmh); break;
-  case 6: snprintf(t, 24, "%u", c.maxAmp); break;
-  case 7: snprintf(t, 24, "%u/5", c.backlight); break;
-  case 8: snprintf(t, 24, "%s", c.wifi ? "ON" : "OFF"); break;
-  case 9: snprintf(t, 24, "UTC%+d", c.tzHours); break;
-  case 10: snprintf(t, 24, "%s", c.rollout ? "1 ft (strip)" : "OFF (0 ft)"); break;
-  case 11: snprintf(t, 24, "%s", c.gpsRate ? "25 Hz (M10)" : "10 Hz"); break;
-  case 12: snprintf(t, 24, "%.1f g", c.maxG10 / 10.0); break;
-  case 13: snprintf(t, 24, "%s", netName[0] ? netName : "set on web page"); break;
+  case 0: snprintf(t, 72, T("%s"), DASH_NAME[c.dash]); break;
+  case 1: snprintf(t, 72, T("%s"), c.speedSrc == 0 ? "RPM" : c.speedSrc == 1 ? "GPS" : "AUTO"); break;
+  case 2: if (c.logRate) snprintf(t, 72, T("%u Hz"), LOG_RATES[c.logRate]); else strcpy(t, "MAX"); break;
+  case 3: snprintf(t, 72, T("%uS"), c.cells); break;
+  case 4: snprintf(t, 72, T("%.2f/%.2f"), c.cellEmptyMv / 1000.0, c.cellFullMv / 1000.0); break;
+  case 5: snprintf(t, 72, T("%u"), c.maxKmh); break;
+  case 6: snprintf(t, 72, T("%u"), c.maxAmp); break;
+  case 7: snprintf(t, 72, T("%u/5"), c.backlight); break;
+  case 8: snprintf(t, 72, T("%s"), c.wifi ? "ON" : "OFF"); break;
+  case 9: snprintf(t, 72, T("UTC%+d"), c.tzHours); break;
+  case 10: snprintf(t, 72, T("%s"), c.rollout ? "1 ft (strip)" : "OFF (0 ft)"); break;
+  case 11: snprintf(t, 72, T("%s"), c.gpsRate ? "25 Hz (M10)" : "10 Hz"); break;
+  case 12: snprintf(t, 72, T("%.1f g"), c.maxG10 / 10.0); break;
+  case 13: snprintf(t, 72, T("%s"), netName[0] ? netName : "set on web page"); break;
   }
 }
-static Btn srow(int i) { return {10 + (i / 7) * 234, 37 + (i % 7) * 35, 226, 32}; }
+static Btn srow(int i) { return {10 + (i / 8) * 234, 37 + (i % 8) * 30, 226, 28}; }
 static const Btn SB[3] = {{10, 282, 148, 30}, {166, 282, 148, 30}, {322, 282, 148, 30}};
 static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
   header(g, "SETUP");
   netName = s.netOn ? s.netSsid : "";
   for (int i = 0; i < NSROW; i++) {
     Btn b = srow(i);
-    g.fillRoundRect(b.x, b.y, b.w, b.h, 7, CARD);
-    g.text(b.x + 10, b.y + 12, SROW[i], F10, MUTED);
-    char t[24]; setupValue(c, i, t);
-    g.text(b.x + 10, b.y + 27, t, F13B, i == 13 && !s.netOn ? MUTED2 : TEXT);
-    if (i == 13) continue;  // typed on the web page
-    g.fillRoundRect(b.x + b.w - 72, b.y + 3, 32, 26, 6, CHIP);
-    g.textMid(b.x + b.w - 56, b.y + 16, "-", F18B, TEXT, AL_C);
-    g.fillRoundRect(b.x + b.w - 37, b.y + 3, 32, 26, 6, CHIP);
-    g.textMid(b.x + b.w - 21, b.y + 16, "+", F18B, TEXT, AL_C);
+    g.fillRoundRect(b.x, b.y, b.w, b.h, 6, i == 0 ? 0x13202A : CARD);
+    g.text(b.x + 10, b.y + 11, SROW[i], F10, MUTED);
+    char t[96];
+    if (i == 0) strcpy(t, c.lang ? "English" : "ไทย"); else setupValue(c, i - 1, t);
+    g.text(b.x + 10, b.y + 25, t, F13B, i == 14 && !s.netOn ? MUTED2 : TEXT);
+    if (i == 14) continue;  // typed on the web page
+    g.fillRoundRect(b.x + b.w - 72, b.y + 2, 32, 24, 6, CHIP);
+    g.textMid(b.x + b.w - 56, b.y + 14, "-", F18B, TEXT, AL_C);
+    g.fillRoundRect(b.x + b.w - 37, b.y + 2, 32, 24, 6, CHIP);
+    g.textMid(b.x + b.w - 21, b.y + 14, "+", F18B, TEXT, AL_C);
   }
   button(g, SB[0], "WHEEL"); button(g, SB[1], "TOUCH CAL"); button(g, SB[2], "INFO");
 }
 static void adjust(Settings &c, int i, int d) {
+  if (i == 0) { c.lang = !c.lang; return; }
+  i--;
   auto cyc = [&](uint8_t &v, int n) { v = (uint8_t)((v + d + n) % n); };
   auto clampAdd = [&](auto &v, int step, int lo, int hi) { int x = (int)v + d * step; v = x < lo ? lo : x > hi ? hi : x; };
   switch (i) {
@@ -963,12 +981,12 @@ static void wheelPage(Gfx &g, const Settings &c) {
     Btn b = wrow(i);
     g.fillRoundRect(b.x, b.y, b.w, b.h, 8, CARD);
     g.text(b.x + 10, b.y + 15, WROW[i], F10, MUTED);
-    char t[24];
-    if (i == 0) snprintf(t, 24, "%u", c.tyreW);
-    if (i == 1) snprintf(t, 24, "%u", c.tyreA);
-    if (i == 2) snprintf(t, 24, "%u", c.tyreR);
-    if (i == 3) snprintf(t, 24, "%+.1f", c.wheelCorr / 10.0);
-    if (i == 4) snprintf(t, 24, "%.2f : 1", c.ratioX100 / 100.0);
+    char t[72];
+    if (i == 0) snprintf(t, sizeof t, T("%u"), c.tyreW);
+    if (i == 1) snprintf(t, sizeof t, T("%u"), c.tyreA);
+    if (i == 2) snprintf(t, sizeof t, T("%u"), c.tyreR);
+    if (i == 3) snprintf(t, sizeof t, T("%+.1f"), c.wheelCorr / 10.0);
+    if (i == 4) snprintf(t, sizeof t, T("%.2f : 1"), c.ratioX100 / 100.0);
     g.text(b.x + 10, b.y + 33, t, F13B, TEXT);
     g.fillRoundRect(b.x + b.w - 74, b.y + 6, 32, 28, 6, CHIP);
     g.textMid(b.x + b.w - 58, b.y + 20, "-", F18B, TEXT, AL_C);
@@ -976,14 +994,14 @@ static void wheelPage(Gfx &g, const Settings &c) {
     g.textMid(b.x + b.w - 22, b.y + 20, "+", F18B, TEXT, AL_C);
   }
   g.fillRoundRect(320, 40, 150, 224, 8, CARD2);
-  char t[48];
-  snprintf(t, 48, "%u/%u-%u", c.tyreW, c.tyreA, c.tyreR);
+  char t[144];
+  snprintf(t, sizeof t, T("%u/%u-%u"), c.tyreW, c.tyreA, c.tyreR);
   g.text(395, 64, t, F15B, TEXT, AL_C);
   g.text(395, 92, "circumference", F10, MUTED, AL_C);
-  snprintf(t, 48, "%.0f mm", c.circMm());
+  snprintf(t, sizeof t, T("%.0f mm"), c.circMm());
   g.text(395, 116, t, F24B, YELLOW, AL_C);
   g.text(395, 148, "at 1000 rpm", F10, MUTED, AL_C);
-  snprintf(t, 48, "%.1f km/h", ride::rpmToKmh(1000, c.circMm(), c.ratioX100 / 100.0f));
+  snprintf(t, sizeof t, T("%.1f km/h"), ride::rpmToKmh(1000, c.circMm(), c.ratioX100 / 100.0f));
   g.text(395, 172, t, F18B, TEXT, AL_C);
   g.text(395, 206, "Tip: ride 100 m", F10, MUTED, AL_C);
   g.text(395, 220, "between 2 marks and", F10, MUTED, AL_C);
@@ -1006,11 +1024,12 @@ static void infoLine(Gfx &g, int &y, const char *k, const char *v, uint32_t c = 
   g.text(14, y, k, F11, MUTED); g.text(130, y, v, F13B, c); y += 21;
 }
 static void updateLine(Gfx &g, const UiState &s) {
-  char t[96];
+  char t[256];
   uint32_t c = s.updState == 4 ? RED : s.updAvailable ? YELLOW : s.netConnected ? GREEN : MUTED2;
-  if (s.updState == 2) snprintf(t, 96, "Downloading %s... %d%%", s.updLatest, s.updProgress);
-  else if (s.updMsg[0]) snprintf(t, 96, "%s", s.updMsg);
-  else snprintf(t, 96, s.netConnected ? "Not checked yet" : "Join a Wi-Fi network (web page > SETUP)");
+  if (s.updState == 2) snprintf(t, sizeof t, T("Downloading %s... %d%%"), s.updLatest, s.updProgress);
+  else if (s.updFmt && s.updFmt[0]) snprintf(t, sizeof t, T(s.updFmt), s.updArg);
+  else if (s.updMsg[0]) snprintf(t, sizeof t, "%s", s.updMsg);
+  else snprintf(t, sizeof t, "%s", s.netConnected ? T("Not checked yet") : T("Join a Wi-Fi network (web page > SETUP)"));
   g.text(14, 262, "Update", F11, MUTED);
   g.text(130, 262, t, F13B, c);
   if (s.updState == 2) {
@@ -1020,28 +1039,28 @@ static void updateLine(Gfx &g, const UiState &s) {
 }
 static void infoPage(Gfx &g, const UiState &s) {
   header(g, "INFO");
-  char t[96];
+  char t[256];
   int y = 54;
   infoLine(g, y, "Firmware", s.fw);
   if (s.rolledBack) infoLine(g, y, "Last update", "failed to start - previous version restored", RED);
   infoLine(g, y, "Hotspot", s.ssid);
-  if (s.netOn) snprintf(t, 96, "%s · %s", s.netSsid, s.netConnected ? s.netIp : "connecting...");
-  else snprintf(t, 96, "not set (web page > SETUP)");
+  if (s.netOn) snprintf(t, sizeof t, T("%s · %s"), s.netSsid, s.netConnected ? s.netIp : T("connecting..."));
+  else snprintf(t, sizeof t, "%s", T("not set (web page > SETUP)"));
   infoLine(g, y, "Internet", t, s.netConnected ? GREEN : MUTED2);
-  snprintf(t, 96, "%s · %u baud · %.1f Hz", s.linked ? "connected" : "no data", (unsigned)s.baud, s.hz);
+  snprintf(t, sizeof t, T("%s · %u baud · %.1f Hz"), s.linked ? T("connected") : T("no data"), (unsigned)s.baud, s.hz);
   infoLine(g, y, "Controller", t, s.linked ? GREEN : RED);
-  snprintf(t, 96, "%u good · %u bad", (unsigned)s.frames, (unsigned)s.errors);
+  snprintf(t, sizeof t, T("%u good · %u bad"), (unsigned)s.frames, (unsigned)s.errors);
   infoLine(g, y, "Frames", t);
-  if (s.gpsSeen) snprintf(t, 96, "%s%s · %d sats · %.0f Hz · ±%.1f km/h", s.gpsUbx ? "u-blox " : "NMEA ", s.gpsFix ? "fix" : "no fix", s.gpsSats, s.gpsHz, s.gpsSAcc);
-  else snprintf(t, 96, "not connected (optional)");
+  if (s.gpsSeen) snprintf(t, sizeof t, T("%s%s · %d sats · %.0f Hz · ±%.1f km/h"), s.gpsUbx ? "u-blox " : "NMEA ", s.gpsFix ? T("fix") : T("no fix"), s.gpsSats, s.gpsHz, s.gpsSAcc);
+  else snprintf(t, sizeof t, "%s", T("not connected (optional)"));
   infoLine(g, y, "GPS", t, s.gpsFix ? GREEN : TEXT);
-  snprintf(t, 96, "%s · %u KB free · RAM %u KB", s.sd ? "SD card" : "internal", (unsigned)s.fsFreeKB, (unsigned)s.heapKB);
+  snprintf(t, sizeof t, T("%s · %u KB free · RAM %u KB"), s.sd ? T("SD card") : T("internal"), (unsigned)s.fsFreeKB, (unsigned)s.heapKB);
   infoLine(g, y, "Storage", t);
   infoLine(g, y, "Wiring", "VOTOL TX>IO35 · RX<IO22 · GPS TX>IO21, RX<IO22", MUTED2);
   g.boxed(0, 248, 480, 30, BG, [&] { updateLine(g, s); });
   bool stopped = !s.linked || s.live.rpm == 0;
   button(g, IB_CHECK, "CHECK FOR UPDATE", s.netConnected ? CHIP : CARD2, s.netConnected ? TEXT : DIM);
-  char b[32]; snprintf(b, 32, s.updAvailable ? "INSTALL %s" : "INSTALL", s.updLatest);
+  char b[96]; snprintf(b, sizeof b, s.updAvailable ? T("INSTALL %s") : T("INSTALL"), s.updLatest);
   bool can = s.updAvailable && stopped && s.updState != 2;
   button(g, IB_INSTALL, b, can ? YELLOW : CARD2, can ? 0x000000 : DIM);
 }
@@ -1062,6 +1081,8 @@ static void dash(Gfx &g, const UiState &s, const Settings &c, bool full) {
   else dashA(g, s, c, full);
 }
 void draw(Gfx &g, const UiState &s, const Settings &c) {
+  i18n::lang = c.lang;
+  showAdv = c.advanced;
   switch (page) {
   case PG_BOOT: bootPage(g, s); break;
   case PG_DASH: dash(g, s, c, true); if (menuOpen) drawMenu(g, c); break;
@@ -1082,6 +1103,7 @@ void draw(Gfx &g, const UiState &s, const Settings &c) {
   }
 }
 void update(Gfx &g, const UiState &s, const Settings &c) {
+  i18n::lang = c.lang;
   if (page == PG_DASH && !menuOpen) dash(g, s, c, false);
   else if (page == PG_DRAG) dragPage(g, s, c, false);
   else if (page == PG_INFO) g.boxed(0, 248, 480, 30, BG, [&] { updateLine(g, s); });
@@ -1093,6 +1115,7 @@ bool tick(uint32_t ms) {
   return false;
 }
 bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
+  showAdv = c.advanced;
   switch (page) {
   case PG_BOOT: go(PG_DASH); return true;
   case PG_DASH:
@@ -1136,6 +1159,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     return false;
   case PG_TUNE:
     if (hit(BACK, x, y)) { go(PG_DASH); return true; }
+    if (hit(ADV_BTN, x, y)) { c.advanced = !c.advanced; showAdv = c.advanced; a.settingsChanged = true; return true; }
     if (hit(TB[0], x, y) && !s.busy) { a.readParams = true; s.msg[0] = 0; return true; }
     if (hit(TB[1], x, y)) { backupSel = -1; go(PG_BACKUPS); return true; }
     if (hit(TB[2], x, y) && changedCount(s)) { s.msg[0] = 0; go(PG_CONFIRM); return true; }

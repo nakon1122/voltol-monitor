@@ -1,0 +1,158 @@
+// Thai translations of the on-screen texts (English is the key).
+// Only fonts that contain Thai glyphs get translated (see gfx.h): the large
+// display fonts (READY, speeds...) stay in English/digits.
+#include <string.h>
+#include "i18n.h"
+
+namespace i18n {
+uint8_t lang = LANG_TH;
+
+struct Pair { const char *en, *th; };
+static const Pair TH[] = {
+    // dashboard
+    {"A Sport Arc", "A สปอร์ตอาร์ค"}, {"B Digital Race", "B ดิจิทัลเรซ"}, {"C Twin Gauge", "C เกจคู่"},
+    {"NO LINK", "ไม่มีสัญญาณ"}, {"FAULT", "ผิดปกติ"}, {"No fault", "ไม่มีข้อผิดพลาด"},
+    {"GPS only · %d sats · no controller", "GPS อย่างเดียว · %d ดวง · ไม่ได้ต่อกล่อง"},
+    {"Waiting for controller (%u baud)", "รอสัญญาณจากกล่อง (%u baud)"},
+    {"BATTERY", "แบตเตอรี่"}, {"REGEN", "ชาร์จกลับ"}, {"CURRENT", "กระแส"}, {"POWER", "กำลัง"},
+    {"CTRL", "กล่อง"}, {"MOTOR", "มอเตอร์"}, {"TRIP %.1f km   ODO %.0f km", "ทริป %.1f กม.   รวม %.0f กม."},
+    {"TRIP %.1f km · ODO %.0f km", "ทริป %.1f กม. · รวม %.0f กม."}, {"GEAR", "เกียร์"}, {"AMP", "แอมป์"},
+    {"VOLT", "โวลต์"}, {"TEMP", "อุณหภูมิ"}, {"ctrl/motor", "กล่อง/มอเตอร์"}, {"TRIP", "ทริป"}, {"ODO", "ระยะรวม"},
+    {"None", "ไม่มี"},
+    // status
+    {"IDLE", "ว่าง"}, {"INIT", "เริ่มระบบ"}, {"START", "สตาร์ท"}, {"RUN", "วิ่ง"}, {"STOP", "หยุด"},
+    {"BRAKE", "เบรก"}, {"WAIT", "รอ"},
+    // menu / header
+    {"STYLE", "หน้าปัด"}, {"DRAG", "แดร็ก"}, {"LOG", "บันทึก"}, {"TUNE", "จูน"}, {"SETUP", "ตั้งค่า"},
+    {"< DASH", "< หน้าปัด"},
+    // drag
+    {"GPS: hold still for 1 s%s", "GPS: จอดนิ่ง 1 วินาที%s"},
+    {"Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)", "รอ GPS: %d ดวง ±%.1f กม./ชม. (ต้อง 6 ดวง, ±1.0)"},
+    {"HYBRID: launch from RPM, distance from GPS %.0f Hz%s", "ไฮบริด: ออกตัวจาก RPM ระยะจาก GPS %.0f Hz%s"},
+    {"GPS %.0f Hz · starts above 3 km/h%s", "GPS %.0f Hz · เริ่มนับเมื่อเกิน 3 กม./ชม.%s"},
+    {"GPS %.0f Hz · %d sats · ±%.1f km/h%s", "GPS %.0f Hz · %d ดวง · ±%.1f กม./ชม.%s"},
+    {"Bring the bike to a full stop (0 RPM)%s", "จอดรถให้นิ่งสนิท (0 RPM)%s"},
+    {"0 RPM · Timer starts when the wheel turns%s", "0 RPM · เริ่มจับเวลาทันทีที่ล้อหมุน%s"},
+    {"Press ARM, then launch from a standstill%s", "กด ARM แล้วออกตัวจากจุดหยุดนิ่ง%s"},
+    {" · rollout 1 ft", " · rollout 1 ฟุต"}, {" · 1 ft rollout", " · rollout 1 ฟุต"},
+    {"TIME", "เวลา"}, {"TRAP", "ความเร็วผ่าน"}, {"Δ BEST", "Δ ดีสุด"}, {"PEAK A", "กระแสสูงสุด"},
+    {"ABORT", "ยกเลิก"}, {"SPEED", "ความเร็ว"}, {"SPLIT", "ช่วง"},
+    {"Distance %.1f m  ·  %.0f A  ·  slip %.0f%%", "ระยะ %.1f ม.  ·  %.0f A  ·  ล้อฟรี %.0f%%"},
+    {"Distance %.1f m  ·  %.0f A  ·  %.1f kW", "ระยะ %.1f ม.  ·  %.0f A  ·  %.1f kW"},
+    {"Distance %.1f m  ·  GPS %d sats", "ระยะ %.1f ม.  ·  GPS %d ดวง"},
+    {"FINISHED", "เสร็จสิ้น"}, {"ARMED", "รอจอดนิ่ง"}, {"READY", "พร้อม"}, {"ABORTED", "ยกเลิกแล้ว"},
+    {"402 m @ %.1f km/h", "402 ม. @ %.1f กม./ชม."}, {"★ NEW BEST %+.2f", "★ สถิติใหม่ %+.2f"}, {"★ NEW BEST", "★ สถิติใหม่"},
+    {"Run stopped before 402 m", "หยุดก่อนถึง 402 ม."},
+    {"Peak %.0f A · %.1f kW · min %.1f V", "สูงสุด %.0f A · %.1f kW · ต่ำสุด %.1f V"},
+    {"no controller data", "ไม่มีข้อมูลจากกล่อง"}, {"GPS timing", "จับเวลาด้วย GPS"},
+    {"RPM timing ±0.05 s", "จับเวลาด้วย RPM ±0.05 วิ"}, {"SPIN-CORRECTED", "แก้ล้อฟรี"},
+    {"Not counted as best run", "ไม่นับเป็นรอบดีที่สุด"}, {"Max wheel slip %.0f%% (GPS)", "ล้อฟรีสูงสุด %.0f%% (GPS)"},
+    {"Wheel spin detected", "ตรวจพบล้อฟรี"}, {"EXIT", "ออก"}, {"HISTORY", "ประวัติ"}, {"WHEEL", "ล้อ"},
+    {"AGAIN", "อีกครั้ง"}, {"BEST RUN", "รอบดีที่สุด"}, {"No runs yet", "ยังไม่มีรอบวิ่ง"}, {"DISARM", "ยกเลิก ARM"},
+    {"DRAG HISTORY", "ประวัติแดร็ก"}, {"DATE", "วันที่"}, {"No runs saved yet", "ยังไม่มีผลที่บันทึก"},
+    // log
+    {"SD card", "การ์ด SD"}, {"internal", "ภายใน"}, {"internal flash", "หน่วยความจำภายใน"},
+    {"Storage: %s · %u KB free of %u KB · rate %s", "ที่เก็บ: %s · ว่าง %u จาก %u KB · อัตรา %s"},
+    {"Storage: %s · %u KB free of %u KB · %u Hz", "ที่เก็บ: %s · ว่าง %u จาก %u KB · %u Hz"},
+    {"max", "สูงสุด"}, {"THIS TRIP", "ทริปนี้"}, {"km", "กม."}, {"max km/h", "สูงสุด กม./ชม."},
+    {"avg km/h", "เฉลี่ย กม./ชม."}, {"max A", "สูงสุด A"}, {"TRIPS", "ทริปที่ผ่านมา"},
+    {"No trips recorded yet", "ยังไม่มีทริปที่บันทึก"}, {"GRAPH", "กราฟ"}, {"FAULTS", "ข้อผิดพลาด"},
+    {"NEW TRIP", "เริ่มทริปใหม่"}, {"last minutes · 1 point/s", "นาทีล่าสุด · 1 จุด/วินาที"},
+    {"Not enough data yet", "ข้อมูลยังไม่พอ"}, {"km/h (left)", "กม./ชม. (ซ้าย)"}, {"current A (right)", "กระแส A (ขวา)"},
+    {"FAULT LOG", "บันทึกข้อผิดพลาด"}, {"No faults recorded", "ไม่มีข้อผิดพลาด"}, {"cleared", "หายแล้ว"},
+    {"Now:", "ตอนนี้:"}, {"CLEAR FAULTS", "ล้างข้อผิดพลาด"},
+    // tune
+    {"TUNE CONTROLLER", "จูนกล่องคอนโทรล"}, {"Parameters read %s · check %05X", "อ่านค่าเมื่อ %s · ตรวจสอบ %05X"},
+    {"Backup #%u saved before any change · %d backups kept", "สำรองค่า #%u แล้ว · เก็บไว้ %d ชุด"},
+    {"No backup yet", "ยังไม่มีค่าสำรอง"}, {"Reading parameters...", "กำลังอ่านค่า..."},
+    {"Parameters not read yet", "ยังไม่ได้อ่านค่าพารามิเตอร์"},
+    {"Stop the bike, switch on, then press READ", "จอดรถ เปิดสวิตช์ แล้วกด อ่านค่า"},
+    {"LAUNCH PROFILE", "โปรไฟล์ออกตัว"}, {"Street / Launch throttle settings against wheel spin", "ค่าคันเร่ง ขับปกติ / ออกตัว ลดล้อฟรี"},
+    {"READING...", "กำลังอ่าน..."}, {"READ", "อ่านค่า"}, {"BACKUPS", "ค่าสำรอง"}, {"WRITE (%d)", "เขียนค่า (%d)"},
+    {"WRITE", "เขียนค่า"}, {"UP", "ขึ้น"}, {"DOWN", "ลง"}, {"was %s", "เดิม %s"}, {"UNDO", "คืนค่า"}, {"DONE", "เสร็จ"},
+    {"%d settings", "%d ค่า"}, {"%d settings · %d changed", "%d ค่า · แก้ %d"}, {"ADVANCED: ON", "ขั้นสูง: เปิด"},
+    {"ADVANCED: OFF", "ขั้นสูง: ปิด"},
+    {"WRITE PARAMETERS", "เขียนค่าลงกล่อง"}, {"These values will be written to the controller:", "ค่าต่อไปนี้จะถูกเขียนลงกล่อง:"},
+    {"+ %d more", "+ อีก %d ค่า"}, {"Bike stopped (0 RPM)", "รถจอดนิ่งแล้ว (0 RPM)"},
+    {"Stop the bike first: writing needs 0 RPM", "ต้องจอดรถก่อน: เขียนค่าได้เมื่อ 0 RPM"},
+    {"A backup of the current values is kept (#%u). Values are read back to verify.", "มีค่าสำรองเดิมแล้ว (#%u) และจะอ่านค่ากลับมาตรวจหลังเขียน"},
+    {"CANCEL", "ยกเลิก"}, {"WRITING...", "กำลังเขียน..."}, {"PARAMETER BACKUPS", "ค่าพารามิเตอร์สำรอง"},
+    {"Saved automatically on every read that differs from the last backup.", "บันทึกอัตโนมัติทุกครั้งที่อ่านค่าแล้วต่างจากชุดล่าสุด"},
+    {"No backups yet - press READ on the TUNE page", "ยังไม่มีค่าสำรอง - กด อ่านค่า ในหน้าจูน"},
+    {"check %05X", "ตรวจสอบ %05X"}, {"= controller", "= ค่าในกล่อง"}, {"RESTORE", "กู้คืน"},
+    {"Restore loads the backup, then WRITE asks for confirmation.", "กู้คืน = โหลดค่าสำรองมาแก้ไข แล้วกดเขียนค่าเพื่อยืนยัน"},
+    {"Read OK", "อ่านค่าสำเร็จ"}, {"No answer from controller", "กล่องไม่ตอบสนอง"}, {"Writing...", "กำลังเขียน..."},
+    {"Written and verified OK", "เขียนและตรวจสอบสำเร็จ"}, {"Read the parameters first", "ต้องอ่านค่าก่อน"},
+    {"No live data from controller", "ไม่มีข้อมูลจากกล่อง"}, {"Motor turning: stop the bike (0 RPM)", "มอเตอร์หมุนอยู่: จอดรถก่อน (0 RPM)"},
+    {"Written, but read-back failed", "เขียนแล้ว แต่อ่านกลับไม่สำเร็จ"},
+    {"Read-back differs: not all values accepted", "อ่านกลับไม่ตรง: กล่องไม่รับบางค่า"},
+    {"Controller did not accept the write", "กล่องไม่รับค่าที่เขียน"},
+    // launch profile
+    {"Lower throttle rise / start torque = less wheel spin at launch.", "ลด Rate of rise / Start torque = ล้อฟรีน้อยลงตอนออกตัว"},
+    {"STREET", "ขับปกติ"}, {"LAUNCH", "ออกตัว"}, {"NOW", "ปัจจุบัน"}, {"SAVE NOW AS STREET", "บันทึกเป็นขับปกติ"},
+    {"SAVE NOW AS LAUNCH", "บันทึกเป็นออกตัว"},
+    {"Apply = load into the editor, then confirm WRITE (backup kept).", "ใช้ = โหลดค่าเข้าตัวแก้ไข แล้วยืนยันเขียนค่า (มีค่าสำรอง)"},
+    {"Raw values as the PC tool shows them.", "เป็นค่าดิบแบบเดียวกับโปรแกรมในคอม"},
+    {"APPLY STREET", "ใช้ค่าขับปกติ"}, {"APPLY LAUNCH", "ใช้ค่าออกตัว"},
+    // setup
+    {"Dashboard", "หน้าปัด"}, {"Speed source", "แหล่งความเร็ว"}, {"Log rate", "อัตราบันทึก"}, {"Battery cells", "จำนวนเซลล์แบต"},
+    {"Cell empty/full", "แรงดันเซลล์ หมด/เต็ม"}, {"Gauge max km/h", "เกจสูงสุด กม./ชม."}, {"Gauge max A", "เกจสูงสุด A"},
+    {"Backlight", "ความสว่างจอ"}, {"Wi-Fi hotspot", "ฮอตสปอต Wi-Fi"}, {"Time zone (UTC)", "เขตเวลา (UTC)"},
+    {"Drag rollout", "Rollout แดร็ก"}, {"GPS rate", "ความถี่ GPS"}, {"Max traction (spin)", "แรงยึดเกาะสูงสุด"},
+    {"Internet Wi-Fi", "Wi-Fi อินเทอร์เน็ต"}, {"Language", "ภาษา"}, {"ไทย", "ไทย"}, {"English", "English"},
+    {"AUTO", "อัตโนมัติ"}, {"MAX", "สูงสุด"}, {"ON", "เปิด"}, {"OFF", "ปิด"}, {"1 ft (strip)", "1 ฟุต (สนาม)"},
+    {"OFF (0 ft)", "ปิด (0 ฟุต)"}, {"set on web page", "ตั้งที่หน้าเว็บ"}, {"TOUCH CAL", "ปรับทัชสกรีน"}, {"INFO", "ข้อมูล"},
+    {"Tyre width (mm)", "หน้ากว้างยาง (มม.)"}, {"Tyre aspect (%)", "ซีรีส์ยาง (%)"}, {"Rim (inch)", "ขอบล้อ (นิ้ว)"},
+    {"Correction (%)", "ปรับแก้ (%)"}, {"Gear ratio", "อัตราทด"}, {"WHEEL / SPEED", "ล้อ / ความเร็ว"},
+    {"circumference", "เส้นรอบวง"}, {"at 1000 rpm", "ที่ 1000 รอบ"}, {"Tip: ride 100 m", "เคล็ดลับ: ขี่ 100 ม."},
+    {"between 2 marks and", "ระหว่าง 2 จุด แล้ว"}, {"adjust Correction", "ปรับแก้จน"}, {"until TRIP shows 0.10", "ทริปขึ้น 0.10"},
+    {"Speed = RPM / ratio x circumference. Hub motor: ratio 1.00", "ความเร็ว = รอบ / อัตราทด x เส้นรอบวง · ฮับมอเตอร์ = 1.00"},
+    // info / update
+    {"Downloading %s... %d%%", "กำลังดาวน์โหลด %s... %d%%"}, {"Not checked yet", "ยังไม่ได้ตรวจ"},
+    {"Join a Wi-Fi network (web page > SETUP)", "ต่อ Wi-Fi ก่อน (หน้าเว็บ > ตั้งค่า)"}, {"Update", "อัปเดต"},
+    {"Firmware", "เฟิร์มแวร์"}, {"Last update", "อัปเดตล่าสุด"},
+    {"failed to start - previous version restored", "เปิดไม่สำเร็จ - กลับไปใช้เวอร์ชันเดิมแล้ว"},
+    {"Hotspot", "ฮอตสปอต"}, {"connecting...", "กำลังเชื่อมต่อ..."}, {"not set (web page > SETUP)", "ยังไม่ตั้ง (หน้าเว็บ > ตั้งค่า)"},
+    {"Internet", "อินเทอร์เน็ต"}, {"connected", "เชื่อมต่อแล้ว"}, {"no data", "ไม่มีข้อมูล"}, {"Controller", "กล่องคอนโทรล"},
+    {"Frames", "เฟรม"}, {"fix", "จับสัญญาณได้"}, {"no fix", "ยังไม่จับสัญญาณ"}, {"not connected (optional)", "ไม่ได้ต่อ (ไม่บังคับ)"},
+    {"Storage", "ที่เก็บข้อมูล"}, {"Wiring", "การต่อสาย"}, {"CHECK FOR UPDATE", "ตรวจหาอัปเดต"}, {"INSTALL %s", "ติดตั้ง %s"},
+    {"INSTALL", "ติดตั้ง"}, {"Connecting to VOTOL controller...", "กำลังเชื่อมต่อกล่อง VOTOL..."},
+    {"%s · %u baud · %.1f Hz", "%s · %u baud · %.1f Hz"}, {"%u good · %u bad", "ดี %u · เสีย %u"},
+    {"%s · %u KB free · RAM %u KB", "%s · ว่าง %u KB · RAM %u KB"},
+    {"Up to date (%s)", "เป็นเวอร์ชันล่าสุดแล้ว (%s)"}, {"Version %s available", "มีเวอร์ชัน %s ใหม่"},
+    {"Cannot reach GitHub", "เชื่อมต่อ GitHub ไม่ได้"}, {"No internet Wi-Fi connection", "ไม่มีการเชื่อมต่ออินเทอร์เน็ต"},
+    {"Motor turning: stop the bike (0 RPM) to update", "มอเตอร์หมุนอยู่: จอดรถ (0 RPM) ก่อนอัปเดต"},
+    {"Drag run in progress", "กำลังจับเวลาแดร็ก"},
+    {"Too big for this board: install once with USB (FLASH .bat)", "ไฟล์ใหญ่เกินพื้นที่เดิม: แฟลชผ่าน USB 1 ครั้ง (FLASH .bat)"},
+    {"Download failed (%s)", "ดาวน์โหลดไม่สำเร็จ (%s)"}, {"Download interrupted", "ดาวน์โหลดขาดหาย"},
+    {"Checksum mismatch - not installed", "ไฟล์ไม่ตรง (checksum) - ไม่ได้ติดตั้ง"}, {"Install failed", "ติดตั้งไม่สำเร็จ"},
+    {"Installed %s - restarting", "ติดตั้ง %s แล้ว - กำลังรีสตาร์ต"}, {"version.json not found", "ไม่พบ version.json"},
+    {"Bad version.json", "version.json ไม่ถูกต้อง"},
+    // parameter groups and names
+    {"Battery", "แบตเตอรี่"}, {"Sport", "สปอร์ต"}, {"3-Speed", "3 สปีด"}, {"Motor", "มอเตอร์"}, {"Temperature", "อุณหภูมิ"},
+    {"Throttle", "คันเร่ง"}, {"Overvoltage", "แรงดันเกิน"}, {"Undervoltage", "แรงดันต่ำ"}, {"Soft undervoltage", "แรงดันต่ำ (เริ่มลดกำลัง)"},
+    {"Undervoltage variation", "ช่วงแรงดันต่ำ"}, {"Busbar current", "กระแสแบต (บัส)"}, {"Phase current", "กระแสเฟส"},
+    {"Sport current limit", "กระแสโหมดสปอร์ต"}, {"Sport flux-weakening", "Flux-weakening สปอร์ต"},
+    {"Flux-weak compensation", "ชดเชย Flux-weak"}, {"Speed ratio", "อัตราความเร็ว"}, {"Soft-start grade", "ระดับออกตัวนุ่ม"},
+    {"Logout time", "เวลาออกโหมด"}, {"Recovery time", "เวลาคืนโหมด"}, {"Low speed", "สปีดต่ำ"}, {"Mid speed", "สปีดกลาง"},
+    {"High speed", "สปีดสูง"}, {"Mid flux-weakening", "Flux-weak สปีดกลาง"}, {"High flux-weakening", "Flux-weak สปีดสูง"},
+    {"Low speed (2)", "สปีดต่ำ (2)"}, {"Mid speed (2)", "สปีดกลาง (2)"}, {"High speed (2)", "สปีดสูง (2)"},
+    {"Flux-weakening (2)", "Flux-weak (2)"}, {"Mid flux-weak (2)", "Flux-weak กลาง (2)"}, {"High flux-weak (2)", "Flux-weak สูง (2)"},
+    {"HDC lowest speed", "ความเร็วต่ำสุด HDC"}, {"Pole pairs", "จำนวนคู่ขั้ว"}, {"Hall shift angle", "มุมเลื่อนฮอลล์"},
+    {"Reverse speed limit", "จำกัดความเร็วถอยหลัง"}, {"EBS ratio", "อัตราเบรกไฟฟ้า (EBS)"},
+    {"Initial temperature", "อุณหภูมิเริ่มลดกำลัง"}, {"Over-temperature", "อุณหภูมิเกิน"}, {"Max temperature", "อุณหภูมิสูงสุด"},
+    {"Start voltage", "แรงดันเริ่ม"}, {"End voltage", "แรงดันสุด"}, {"Low protect", "ป้องกันต่ำ"}, {"High protect", "ป้องกันสูง"},
+    {"Start torque", "แรงบิดตอนออกตัว"}, {"Combinative torque", "แรงบิดรวม"}, {"Rate of rise", "อัตราเร่งคันเร่ง"},
+    {"Rate of decline", "อัตราลดคันเร่ง"},
+    // faults
+    {"Overcurrent", "กระแสเกิน"}, {"Overheating", "ร้อนเกิน"}, {"Hall fault", "ฮอลล์ผิดปกติ"}, {"Motor hall", "ฮอลล์มอเตอร์"},
+    {"Brake", "เบรก"}, {"Out of control", "ควบคุมไม่ได้"}, {"Controller failure", "กล่องผิดปกติ"},
+};
+
+const char *tr(const char *en) {
+  if (lang != LANG_TH || !en || !*en) return en;
+  for (const Pair &p : TH)
+    if (!strcmp(p.en, en)) return p.th;
+  return en;
+}
+}  // namespace i18n

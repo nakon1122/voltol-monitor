@@ -115,14 +115,20 @@ def main():
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / 'sim'
         subprocess.run(['g++', '-std=c++17', '-O1', '-I', str(ROOT / 'include'), '-o', str(exe),
-                        str(ROOT / 'tools/sim/sim_main.cpp'), str(ROOT / 'src/ui.cpp'), str(ROOT / 'src/fonts_vlw.cpp')], check=True)
+                        str(ROOT / 'tools/sim/sim_main.cpp'), str(ROOT / 'src/ui.cpp'), str(ROOT / 'src/fonts_vlw.cpp'), str(ROOT / 'src/i18n.cpp')], check=True)
         lines = subprocess.run([str(exe)], check=True, capture_output=True, text=True).stdout.splitlines()
+        lines += subprocess.run([str(exe), 'en'], check=True, capture_output=True, text=True).stdout.splitlines()
     fonts = load_fonts()
     shots = replay(lines, fonts)
     for f in OUT.glob('*.png'):
         if not f.name.startswith(('web_', 's3web_')): f.unlink()
     for name, im in shots:
         im.resize((W * 2, H * 2), Image.NEAREST).save(OUT / f'{name}.png')
+    sheet(OUT / 'ALL_SCREENS.png', [x for x in shots if not x[0].startswith('en_')])
+    sheet(OUT / 'ALL_SCREENS_EN.png', [x for x in shots if x[0].startswith('en_')])
+    print(f'{len(shots)} screens -> {OUT}')
+
+def sheet(path, shots):
     # contact sheet
     cols, sw, sh = 4, 480, 320
     rows = math.ceil(len(shots) / cols)
@@ -134,8 +140,7 @@ def main():
         x, y = 16 + (k % cols) * (sw + 16), 16 + (k // cols) * (sh + 40)
         d.text((x, y), name, fill=(200, 210, 220), font=lab)
         sheet.paste(im, (x, y + 24))
-    sheet.save(OUT / 'ALL_SCREENS.png')
-    print(f'{len(shots)} screens -> {OUT}')
+    sheet.save(path)
 
 if __name__ == '__main__':
     main()

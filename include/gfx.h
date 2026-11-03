@@ -7,6 +7,9 @@
 #include <stdint.h>
 #include <functional>
 #include "fonts_vlw.h"
+#include "thai_shape.h"
+#include "i18n.h"
+inline bool fontThai(int f) { return f == F10 || f == F11 || f == F11B || f == F13 || f == F13B || f == F15B; }
 
 // Text anchors (x is left/centre/right, y is always the BASELINE).
 enum Align : uint8_t { AL_L, AL_C, AL_R };
@@ -34,9 +37,13 @@ struct Gfx {
   int textWidth(const char *s, int font);
   int capHeight(int font);  // height of 'H' above the baseline
   void text(int x, int y, const char *s, int font, uint32_t c, Align a = AL_L) {
-    int w = a == AL_L ? 0 : textWidth(s, font);
+    char buf[400];
+    if (fontThai(font)) s = T(s);
+    if (thai::needs(s)) s = thai::shape(s, buf, sizeof buf);
+    int w = a == AL_L ? 0 : rawWidth(s, font);
     textRaw(a == AL_L ? x : a == AL_C ? x - w / 2 : x - w, y, s, font, c);
   }
+  int rawWidth(const char *s, int font);  // width of already-shaped text
   // Vertically centred on y (uses cap height).
   void textMid(int x, int y, const char *s, int font, uint32_t c, Align a = AL_L) {
     text(x, y + capHeight(font) / 2, s, font, c, a);

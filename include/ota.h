@@ -10,7 +10,9 @@ struct Status {
   char latest[16] = "";
   uint8_t state = S_IDLE;
   int progress = 0;         // download %
-  char msg[64] = "";
+  char msg[64] = "";        // English, for the web page
+  const char *fmt = "";     // same message as format + argument, translated on screen
+  char arg[24] = "";
   bool rolledBack = false;  // last update failed to start, previous firmware restored
 };
 // Returns a reason why updating is not allowed right now, or nullptr.

@@ -21,6 +21,8 @@ struct Settings {
   uint8_t rollout = 0;      // drag: 1 = clock starts after the first foot (drag-strip style)
   uint8_t gpsRate = 0;      // 0 = 10 Hz, 1 = 25 Hz (u-blox M10)
   uint8_t maxG10 = 16;      // max traction for the drag timer, 0.1 g (wheel-spin limit)
+  uint8_t lang = 0;         // 0 Thai, 1 English
+  uint8_t advanced = 0;     // show risky parameters (hall angle, pole pairs ...)
   uint8_t wifi = 1;
   float circMm() const {
     return ride::tyreCircMm(tyreW, tyreA, tyreR) * (1000 + wheelCorr) / 1000.0f;
@@ -93,6 +95,8 @@ struct UiState {
   char netSsid[33] = "", netIp[16] = "";
   bool updAvailable = false, rolledBack = false;
   char updLatest[16] = "", updMsg[64] = "";
+  const char *updFmt = "";     // updMsg as an English format, translated on screen
+  char updArg[24] = "";
   uint8_t updState = 0;        // ota::State
   int updProgress = 0;
   // info

@@ -186,6 +186,7 @@ struct ParamDef {
   uint8_t dec;        // decimals shown; raw = value * 10^dec
   int32_t min, max;   // raw limits accepted by the editor
   int32_t step;       // raw step of the +/- buttons
+  bool adv;           // advanced: hidden unless "advanced" is switched on
 };
 // Groups mirror the PC tool's tabs. T_THR = throttle voltage byte:
 // volts = floor(raw*550/255 + 2.2) / 100.
@@ -193,7 +194,7 @@ static const ParamDef PARAMS[] = {
     {"Battery", "Overvoltage", "V", 1, 7, T_S16, 1, 100, 2000, 1},
     {"Battery", "Undervoltage", "V", 1, 16, T_S16, 1, 100, 2000, 1},
     {"Battery", "Soft undervoltage", "V", 1, 9, T_S16, 1, 100, 2000, 1},
-    {"Battery", "Undervoltage variation", "V", 1, 11, T_U8, 1, 0, 255, 1},
+    {"Battery", "Undervoltage variation", "V", 1, 11, T_U8, 1, 0, 255, 1, true},
     {"Battery", "Busbar current", "A", 1, 12, T_U16, 0, 0, 1000, 1},
     {"Battery", "Phase current", "A", 1, 14, T_U16, 0, 0, 2000, 1},
     {"Sport", "Sport current limit", "A", 2, 5, T_S16, 0, 0, 1000, 1},
@@ -215,20 +216,20 @@ static const ParamDef PARAMS[] = {
     {"3-Speed", "Mid flux-weak (2)", "", 4, 19, T_S16, 0, 0, 10000, 10},
     {"3-Speed", "High flux-weak (2)", "", 4, 17, T_S16, 0, 0, 10000, 10},
     {"3-Speed", "HDC lowest speed", "", 4, 10, T_S16, 0, 0, 3000, 10},
-    {"Motor", "Pole pairs", "", 3, 18, T_U8, 0, 1, 64, 1},
-    {"Motor", "Hall shift angle", "", 3, 5, T_S16, 0, -360, 360, 1},
+    {"Motor", "Pole pairs", "", 3, 18, T_U8, 0, 1, 64, 1, true},
+    {"Motor", "Hall shift angle", "", 3, 5, T_S16, 0, -360, 360, 1, true},
     {"Motor", "Reverse speed limit", "%", 3, 16, T_U8, 0, 0, 100, 1},
     {"Motor", "EBS ratio", "%", 3, 19, T_U8, 0, 0, 100, 1},
     {"Temperature", "Initial temperature", "C", 3, 7, T_U8, 0, 0, 200, 1},
     {"Temperature", "Over-temperature", "C", 3, 8, T_U8, 0, 0, 200, 1},
     {"Temperature", "Max temperature", "C", 3, 9, T_U8, 0, 0, 200, 1},
-    {"Temperature", "T.C.1", "", 3, 10, T_S16, 0, -32000, 32000, 1},
-    {"Temperature", "T.C.2", "", 3, 12, T_S16, 0, -32000, 32000, 1},
-    {"Temperature", "T.C.3", "", 3, 14, T_S16, 0, -32000, 32000, 1},
+    {"Temperature", "T.C.1", "", 3, 10, T_S16, 0, -32000, 32000, 1, true},
+    {"Temperature", "T.C.2", "", 3, 12, T_S16, 0, -32000, 32000, 1, true},
+    {"Temperature", "T.C.3", "", 3, 14, T_S16, 0, -32000, 32000, 1, true},
     {"Throttle", "Start voltage", "V", 7, 5, T_THR, 2, 0, 255, 1},
     {"Throttle", "End voltage", "V", 7, 6, T_THR, 2, 0, 255, 1},
-    {"Throttle", "Low protect", "V", 7, 7, T_THR, 2, 0, 255, 1},
-    {"Throttle", "High protect", "V", 7, 8, T_THR, 2, 0, 255, 1},
+    {"Throttle", "Low protect", "V", 7, 7, T_THR, 2, 0, 255, 1, true},
+    {"Throttle", "High protect", "V", 7, 8, T_THR, 2, 0, 255, 1, true},
     {"Throttle", "Start torque", "", 7, 11, T_U16, 0, 0, 5000, 10},
     {"Throttle", "Combinative torque", "", 7, 13, T_U16, 0, 0, 5000, 10},
     {"Throttle", "Rate of rise", "", 7, 10, T_U8, 0, 0, 255, 1},

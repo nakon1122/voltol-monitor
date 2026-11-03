@@ -51,7 +51,7 @@ static void shortWhen(char *out, int n) {  // "03 Nov 18:42"
 }
 
 // -------------------------------------------------------------- settings ----
-static const uint8_t CFG_VER = 4;
+static const uint8_t CFG_VER = 5;
 static void loadSettings() {
   Preferences p;
   p.begin("voltol", true);
@@ -436,7 +436,7 @@ static String paramsJson() {
     J j;
     j.i("i", i).t("g", d.group).t("n", d.name).t("u", d.unit).i("d", d.dec)
      .n("v", votol::shown(S.edit, d), d.dec).n("o", votol::shown(S.params.b, d), d.dec)
-     .i("r", votol::getRaw(S.edit, d)).i("ro", votol::getRaw(S.params.b, d)).i("st", d.step).i("mn", d.min).i("mx", d.max);
+     .i("r", votol::getRaw(S.edit, d)).i("ro", votol::getRaw(S.params.b, d)).i("st", d.step).i("mn", d.min).i("mx", d.max).b("adv", d.adv);
     fl += (i ? "," : "") + j.obj();
   }
   J j;
@@ -450,14 +450,14 @@ struct SetDef { const char *k; int lo, hi; };
 static const SetDef SETS[] = {{"dash", 0, 2}, {"speedSrc", 0, 2}, {"logRate", 0, 4}, {"cells", 6, 40},
   {"cellEmptyMv", 2000, 4000}, {"cellFullMv", 3000, 4400}, {"maxKmh", 40, 400}, {"maxAmp", 50, 1500},
   {"backlight", 1, 5}, {"wifi", 0, 1}, {"tzHours", -12, 14}, {"rollout", 0, 1}, {"gpsRate", 0, 1},
-  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}};
+  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}, {"advanced", 0, 1}};
 static int setGet(int i) {
   switch (i) {
   case 0: return cfg.dash; case 1: return cfg.speedSrc; case 2: return cfg.logRate; case 3: return cfg.cells;
   case 4: return cfg.cellEmptyMv; case 5: return cfg.cellFullMv; case 6: return cfg.maxKmh; case 7: return cfg.maxAmp;
   case 8: return cfg.backlight; case 9: return cfg.wifi; case 10: return cfg.tzHours; case 11: return cfg.rollout;
   case 12: return cfg.gpsRate; case 13: return cfg.tyreW; case 14: return cfg.tyreA; case 15: return cfg.tyreR;
-  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; default: return cfg.maxG10;
+  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; case 18: return cfg.maxG10; default: return cfg.advanced;
   }
 }
 static void setPut(int i, int v) {
@@ -475,7 +475,8 @@ static void setPut(int i, int v) {
   case 12: cfg.gpsRate = v; vlink::requestGpsConfig(v ? 25 : 10); break; case 13: cfg.tyreW = v; break;
   case 14: cfg.tyreA = v; break; case 15: cfg.tyreR = v; break; case 16: cfg.wheelCorr = v; break;
   case 17: cfg.ratioX100 = v; break;
-  default: cfg.maxG10 = v; break;
+  case 18: cfg.maxG10 = v; break;
+  default: cfg.advanced = v; break;
   }
 }
 // ---- launch profiles (Street / Launch) ----
@@ -682,7 +683,7 @@ static void doActions(UiActions &a) {
   if (a.checkUpdate) ota::check();
   if (a.installUpdate) {
     const char *why = updateGuard();
-    if (why) strlcpy(S.updMsg, why, sizeof S.updMsg); else ota::install();
+    if (why) { strlcpy(S.updMsg, why, sizeof S.updMsg); S.updFmt = why; S.updArg[0] = 0; } else ota::install();
   }
   if (a.profChanged) saveProf();
 }
@@ -699,7 +700,7 @@ void loop() {
     strlcpy(S.netIp, o.ip, sizeof S.netIp);
     S.updAvailable = o.available;
     strlcpy(S.updLatest, o.latest, sizeof S.updLatest);
-    if (o.msg[0]) strlcpy(S.updMsg, o.msg, sizeof S.updMsg);
+    if (o.msg[0]) { strlcpy(S.updMsg, o.msg, sizeof S.updMsg); S.updFmt = o.fmt; strlcpy(S.updArg, o.arg, sizeof S.updArg); }
     S.updState = o.state;
     S.updProgress = o.progress;
     S.rolledBack = o.rolledBack;
