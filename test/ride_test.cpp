@@ -69,6 +69,54 @@ int main() {
   feed("GPGGA,123519.00,1345.123,N,10030.456,E,1,12,0.8,10.0,M,0.0,M,,");
   CHECK(g.fix.sats == 12 && fabs(g.fix.hdop - 0.8f) < 0.01);
   CHECK(!g.push('$') && !g.push('X'));
+  // ---- GPS mode: parked jitter must not start the clock; launch found by extrapolation
+  {
+    unsigned seed = 1;
+    auto noise = [&](double amp) { seed = seed * 1103515245 + 12345; return ((seed >> 16) % 2001 / 1000.0 - 1) * amp; };
+    double worstG = 0;
+    for (int roll = 0; roll < 2; roll++)
+      for (double ph = 0; ph < 0.04; ph += 0.007) {
+        DragTimer d; d.cfg = DragCfg::gps(roll); d.arm();
+        double a = 3.4, launch = 3.0 + ph;
+        for (double t = ph; t < launch + 30; t += 0.04) {  // 25 Hz
+          double tau = t - launch, v = tau <= 0 ? fabs(noise(0.8)) : a * tau * 3.6 + noise(0.15);
+          d.feed(t, v < 0 ? 0 : v, 100, 72);
+          if (tau < -0.2) CHECK(d.state != DragTimer::RUN);  // jitter while parked
+          if (d.state == DragTimer::DONE) break;
+        }
+        CHECK(d.state == DragTimer::DONE);
+        double tr = roll ? sqrt(2 * ROLLOUT_M / a) : 0;
+        for (int i = 0; i < SPLITS; i++) {
+          double err = fabs(d.r.s[i].t - (sqrt(2 * SPLIT_M[i] / a) - tr));
+          if (err > worstG) worstG = err;
+          CHECK(err < 0.05);
+        }
+      }
+    printf("GPS 25 Hz worst split error (with speed noise): %.4f s\n", worstG);
+  }
+  // ---- UBX: known CFG-RATE 10 Hz frame, and a NAV-PVT round trip
+  {
+    uint8_t o[64];
+    uint8_t rate[6] = {100, 0, 1, 0, 1, 0};
+    int n = gps::ubxMsg(o, 0x06, 0x08, rate, 6);
+    const uint8_t want[14] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12};
+    CHECK(n == 14 && !memcmp(o, want, 14));
+    uint8_t pl[92] = {0};
+    uint32_t itow = 123456789; memcpy(pl, &itow, 4);
+    pl[4] = 0xEA; pl[5] = 0x07; pl[6] = 11; pl[7] = 3; pl[8] = 11; pl[9] = 42; pl[10] = 7; pl[11] = 3;
+    pl[20] = 3; pl[21] = 1; pl[23] = 14;
+    int32_t gs = 27778; memcpy(pl + 60, &gs, 4);  // 100.0 km/h
+    uint32_t sacc = 80; memcpy(pl + 68, &sacc, 4);
+    uint8_t f[100];
+    int m = gps::ubxMsg(f, 0x01, 0x07, pl, 92);
+    gps::Ubx u;
+    int got = 0;
+    for (int i = 0; i < m; i++) got += u.push(f[i]);
+    CHECK(got == 1 && u.pvt.fixOk && u.pvt.numSV == 14 && u.pvt.iTOW == itow);
+    CHECK(fabs(u.pvt.kmh - 100.0f) < 0.01 && fabs(u.pvt.sAccKmh - 0.288f) < 0.001 && u.pvt.year == 2026 && u.pvt.timeValid);
+    uint8_t big[600];
+    CHECK(gps::ubxBaudCmd(big) > 0 && gps::ubxSetupCmd(big, 25) < 600);
+  }
   printf(fails ? "ride_test: %d FAILED\n" : "ride_test: all passed\n", fails);
   return fails ? 1 : 0;
 }

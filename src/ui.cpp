@@ -71,11 +71,11 @@ struct Vals {
 static Vals vals(const UiState &s) {
   Vals v;
   v.ok = s.linked;
+  if (s.speedOk) snprintf(v.kmh, 8, "%d", (int)lroundf(s.kmh)); else strcpy(v.kmh, "--");
   if (!s.linked) {
-    for (char *p : {v.kmh, v.rpm, v.volt, v.amp, v.kw, v.soc, v.tc, v.tm}) strcpy(p, "--");
+    for (char *p : {v.rpm, v.volt, v.amp, v.kw, v.soc, v.tc, v.tm}) strcpy(p, "--");
     return v;
   }
-  snprintf(v.kmh, 8, "%d", (int)lroundf(s.kmh));
   snprintf(v.rpm, 8, "%d", s.live.rpm);
   fmt1(v.volt, 8, s.live.volt);
   fmt1(v.amp, 8, s.live.amp);
@@ -86,6 +86,7 @@ static Vals vals(const UiState &s) {
   return v;
 }
 static void statusText(const UiState &s, char *out, uint32_t &col, uint32_t &bg) {
+  if (!s.linked && s.speedOk) { strcpy(out, "GPS"); col = BLUE; bg = 0x13202A; return; }
   if (!s.linked) { strcpy(out, "NO LINK"); col = MUTED2; bg = CHIP; return; }
   if (s.live.faults) { strcpy(out, "FAULT"); col = TEXT; bg = RED; return; }
   uint8_t st = s.live.status < 8 ? s.live.status : 0;
@@ -94,6 +95,7 @@ static void statusText(const UiState &s, char *out, uint32_t &col, uint32_t &bg)
   bg = st == ST_RUN ? DARKGREEN : CHIP;
 }
 static void faultLine(const UiState &s, char *out, int n) {
+  if (!s.linked && s.speedOk) { snprintf(out, n, "GPS only · %d sats · no controller", s.gpsSats); return; }
   if (!s.linked) { snprintf(out, n, "Waiting for controller (%u baud)", (unsigned)s.baud); return; }
   if (!s.live.faults) { snprintf(out, n, "No fault"); return; }
   faultText(s.live.faults, out, n);
@@ -136,7 +138,7 @@ static uint32_t solidFill(float, void *c) { return *(uint32_t *)c; }
 static float lastA = -1, lastC1 = -1, lastC2 = -1;
 static const int AX = 160, AY = 182, AR = 118;
 static float angA(const UiState &s, const Settings &c) {
-  float f = s.linked ? s.kmh / c.maxKmh : 0;
+  float f = s.speedOk ? s.kmh / c.maxKmh : 0;
   return 135 + 270 * fminf(fmaxf(f, 0), 1);
 }
 static void dashA(Gfx &g, const UiState &s, const Settings &c, bool full) {
@@ -177,7 +179,7 @@ static void dashA(Gfx &g, const UiState &s, const Settings &c, bool full) {
   });
   g.boxed(366, 6, 104, 18, BAR, [&] { gears(g, 366, 6, 22, s); });
   g.boxed(88, 128, 144, 80, BG, [&] {
-    g.text(AX, AY + 20, v.kmh, s.kmh >= 99.5f ? F72B : F86B, s.linked ? TEXT : DIM, AL_C);
+    g.text(AX, AY + 20, v.kmh, s.kmh >= 99.5f ? F72B : F86B, s.speedOk ? TEXT : DIM, AL_C);
   });
   g.boxed(100, 258, 120, 22, BG, [&] {
     char t[24]; snprintf(t, 24, "%s rpm", v.rpm);
@@ -253,7 +255,7 @@ static void dashB(Gfx &g, const UiState &s, const Settings &c, bool full) {
     g.text(45, 148, t, F56B, YELLOW, AL_C);
     g.text(45, 168, st, F10, sc == SUB ? MUTED2 : sc, AL_C);
   });
-  g.boxed(88, 52, 300, 122, BBG, [&] { g.text(238, 168, v.kmh, F150B, s.linked ? TEXT : DIM, AL_C); });
+  g.boxed(88, 52, 300, 122, BBG, [&] { g.text(238, 168, v.kmh, F150B, s.speedOk ? TEXT : DIM, AL_C); });
   // current bar (regen below zero)
   g.boxed(390, 50, 84, 152, BBG, [&] {
     const int bx = 420, by = 56, bh = 130;
@@ -313,7 +315,7 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
       g.textMid(x, y, b, F10, 0x5E6C79, AL_C);
     }
   };
-  float a1 = 140 + 260 * (s.linked ? fminf(s.kmh / c.maxKmh, 1) : 0);
+  float a1 = 140 + 260 * (s.speedOk ? fminf(s.kmh / c.maxKmh, 1) : 0);
   float amp = s.linked ? fmaxf(lo, fminf(hi, s.live.amp)) : 0;
   float a2 = 140 + 260 * (amp - lo) / (hi - lo), z2 = 140 + 260 * (0 - lo) / (hi - lo);
   if (full) {
@@ -346,11 +348,11 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
   char st[16]; uint32_t sc, sb;
   statusText(s, st, sc, sb);
   g.boxed(190, 4, 100, 20, BAR, [&] {
-    g.fillCircle(200, 14, 5, sc == SUB ? MUTED2 : sc == TEXT ? RED : sc);
+    g.fillCircle(200, 14, 5, sc == SUB ? MUTED2 : sc == TEXT ? RED : sc);  // GPS = blue
     g.textMid(210, 14, st, F11B, sc == TEXT ? RED : sc);
   });
   g.boxed(356, 4, 116, 20, BAR, [&] { gears(g, 356, 5, 26, s); });
-  g.boxed(LX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] { g.text(LX, Y0 + 14, v.kmh, s.kmh >= 99.5f ? F38B : F56B, s.linked ? TEXT : DIM, AL_C); });
+  g.boxed(LX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] { g.text(LX, Y0 + 14, v.kmh, s.kmh >= 99.5f ? F38B : F56B, s.speedOk ? TEXT : DIM, AL_C); });
   g.boxed(RX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] {
     char t[8]; snprintf(t, 8, "%d", s.linked ? (int)lroundf(s.live.amp) : 0);
     g.text(RX, Y0 + 14, s.linked ? t : "--", fabsf(s.live.amp) >= 99.5f ? F38B : F56B, s.linked ? TEXT : DIM, AL_C);
@@ -425,6 +427,24 @@ static void dragTop(Gfx &g, const UiState &s, const char *state, uint32_t col) {
   if (s.gpsFix) snprintf(gp, 16, "GPS %d", s.gpsSats); else strcpy(gp, s.gpsSeen ? "GPS ..." : "GPS -");
   chip(g, 412, 5, 60, gp, 0x161B21, s.gpsFix ? GREEN : DIM);
 }
+// One line under the big READY/STOP text describing source and launch rule.
+static void dragHint(Gfx &g, const UiState &s, const Settings &c, int state) {
+  using ride::DragTimer;
+  char t[96];
+  const char *roll = c.rollout ? " · rollout 1 ft" : "";
+  if (s.src) {
+    if (state == DragTimer::ARMED && s.dragWaitGps)
+      snprintf(t, 96, "Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)", s.gpsSats, s.gpsSAcc);
+    else if (state == DragTimer::ARMED) snprintf(t, 96, "GPS: hold still for 1 s%s", roll);
+    else if (state == DragTimer::READY) snprintf(t, 96, "GPS %.0f Hz · starts above 3 km/h%s", s.gpsHz, roll);
+    else snprintf(t, 96, "GPS %.0f Hz · %d sats · ±%.1f km/h%s", s.gpsHz, s.gpsSats, s.gpsSAcc, roll);
+  } else {
+    if (state == DragTimer::ARMED) snprintf(t, 96, "Bring the bike to a full stop (0 RPM)%s", roll);
+    else if (state == DragTimer::READY) snprintf(t, 96, "0 RPM · Timer starts when the wheel turns%s", roll);
+    else snprintf(t, 96, "Press ARM, then launch from a standstill%s", roll);
+  }
+  g.text(240, 114, t, F13, s.dragWaitGps ? YELLOW : SUB, AL_C);
+}
 static void track(Gfx &g, int y, double dist) {
   g.fillRoundRect(14, y, 452, 8, 4, TRACK);
   int w = (int)(452 * fmin(dist, 402.336) / 402.336);
@@ -482,7 +502,8 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
     });
     g.boxed(10, 106, 460, 54, BG, [&] {
       char t[80];
-      snprintf(t, 80, "Distance %.1f m  ·  %.0f A  ·  %.1f kW", d.distance(), s.live.amp, s.kw);
+      if (s.linked) snprintf(t, 80, "Distance %.1f m  ·  %.0f A  ·  %.1f kW", d.distance(), s.live.amp, s.kw);
+    else snprintf(t, 80, "Distance %.1f m  ·  GPS %d sats", d.distance(), s.gpsSats);
       g.text(20, 120, t, F13, SUB);
       track(g, 128, d.distance());
     });
@@ -491,10 +512,13 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
   }
   if (!full) {
     if (d.state == DragTimer::ARMED || d.state == DragTimer::READY || d.state == DragTimer::IDLE)
-      g.boxed(0, 120, 480, 22, BG, [&] {
+      g.boxed(0, 100, 480, 42, BG, [&] {
+        dragHint(g, s, c, d.state);
         char t[64];
-        snprintf(t, 64, "%.1f V · %d%% · CTRL %d°C · Gear %c · %d rpm", s.live.volt, s.soc, s.live.tCtrl,
-                 s.linked ? GEAR_CH[s.live.gear()] : '-', s.live.rpm);
+        if (s.linked)
+          snprintf(t, 64, "%.1f V · %d%% · CTRL %d°C · Gear %c · %d rpm", s.live.volt, s.soc, s.live.tCtrl,
+                   GEAR_CH[s.live.gear()], s.live.rpm);
+        else snprintf(t, 64, "%.1f km/h · no controller connected", s.kmh);
         g.text(240, 134, t, F11, MUTED, AL_C);
       });
     return;
@@ -520,12 +544,13 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
       g.text(20, 84, "ABORTED", F38B, RED);
       g.text(20, 108, "Run stopped before 402 m", F13, SUB);
     }
-    snprintf(t, 48, "Peak %.0f A · %.1f kW", d.r.peakA, d.r.peakKw);
+    if (d.r.peakA > 0) snprintf(t, 48, "Peak %.0f A · %.1f kW · min %.1f V", d.r.peakA, d.r.peakKw, d.r.minV);
+    else snprintf(t, 48, "no controller data");
     g.text(470, 96, t, F10, MUTED, AL_R);
-    snprintf(t, 48, "Min %.1f V · %s", d.r.minV, s.src ? "GPS" : "±0.05 s (RPM)");
+    snprintf(t, 48, "%s%s", s.src ? "GPS timing" : "RPM timing ±0.05 s", c.rollout ? " · 1 ft rollout" : "");
     g.text(470, 110, t, F10, MUTED, AL_R);
     if (d.r.wheelspin) g.text(470, 124, "Wheel spin suspected", F10, YELLOW, AL_R);
-    splitTable(g, 128, d.r, best, true, "SPLIT");
+    splitTable(g, 128, d.r, best, d.r.peakA > 0, "SPLIT");
     button(g, DB[0], "EXIT"); button(g, DB[1], "HISTORY"); button(g, DB[2], "WHEEL");
     button(g, DB[3], "AGAIN", GREEN, 0x000000);
     return;
@@ -533,16 +558,10 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
   // IDLE / ARMED / READY
   bool ready = d.state == DragTimer::READY, armed = d.state == DragTimer::ARMED;
   dragTop(g, s, ready ? "READY" : armed ? "ARMED" : "IDLE", ready ? GREEN : armed ? YELLOW : MUTED2);
-  if (ready) {
-    g.text(240, 92, "READY", F56B, GREEN, AL_C);
-    g.text(240, 114, "0 RPM · Timer starts when the wheel turns", F13, SUB, AL_C);
-  } else if (armed) {
-    g.text(240, 92, "STOP", F56B, YELLOW, AL_C);
-    g.text(240, 114, "Bring the bike to a full stop (0 RPM)", F13, SUB, AL_C);
-  } else {
-    g.text(240, 92, "DRAG", F56B, TEXT, AL_C);
-    g.text(240, 114, "Press ARM, then launch from a standstill", F13, SUB, AL_C);
-  }
+  if (ready) g.text(240, 92, "READY", F56B, GREEN, AL_C);
+  else if (armed) g.text(240, 92, s.dragWaitGps ? "GPS" : "STOP", F56B, YELLOW, AL_C);
+  else g.text(240, 92, "DRAG", F56B, TEXT, AL_C);
+  dragHint(g, s, c, d.state);
   g.text(240, 134, "", F11, MUTED, AL_C);
   if (best) {
     splitTable(g, 146, *best, nullptr, false, "BEST RUN");
@@ -814,8 +833,10 @@ static void backupsPage(Gfx &g, const UiState &s) {
 
 // ============================================================ SETUP =======
 struct Row { const char *name; };
-static const char *const SROW[10] = {"Dashboard", "Speed source", "Log rate", "Battery cells", "Cell empty/full",
-                                     "Gauge max km/h", "Gauge max A", "Backlight", "Wi-Fi export", "Time zone (UTC)"};
+static const int NSROW = 12;
+static const char *const SROW[NSROW] = {"Dashboard", "Speed source", "Log rate", "Battery cells", "Cell empty/full",
+                                        "Gauge max km/h", "Gauge max A", "Backlight", "Wi-Fi", "Time zone (UTC)",
+                                        "Drag rollout", "GPS rate"};
 static void setupValue(const Settings &c, int i, char *t) {
   switch (i) {
   case 0: snprintf(t, 24, "%s", DASH_NAME[c.dash]); break;
@@ -828,22 +849,24 @@ static void setupValue(const Settings &c, int i, char *t) {
   case 7: snprintf(t, 24, "%u/5", c.backlight); break;
   case 8: snprintf(t, 24, "%s", c.wifi ? "ON" : "OFF"); break;
   case 9: snprintf(t, 24, "UTC%+d", c.tzHours); break;
+  case 10: snprintf(t, 24, "%s", c.rollout ? "1 ft (strip)" : "OFF (0 ft)"); break;
+  case 11: snprintf(t, 24, "%s", c.gpsRate ? "25 Hz (M10)" : "10 Hz"); break;
   }
 }
-static Btn srow(int i) { return {10 + (i / 5) * 234, 40 + (i % 5) * 46, 226, 40}; }
+static Btn srow(int i) { return {10 + (i / 6) * 234, 38 + (i % 6) * 40, 226, 36}; }
 static const Btn SB[3] = {{10, 282, 148, 30}, {166, 282, 148, 30}, {322, 282, 148, 30}};
 static void setupPage(Gfx &g, const Settings &c) {
   header(g, "SETUP");
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < NSROW; i++) {
     Btn b = srow(i);
     g.fillRoundRect(b.x, b.y, b.w, b.h, 8, CARD);
-    g.text(b.x + 10, b.y + 15, SROW[i], F10, MUTED);
+    g.text(b.x + 10, b.y + 14, SROW[i], F10, MUTED);
     char t[24]; setupValue(c, i, t);
-    g.text(b.x + 10, b.y + 33, t, F13B, TEXT);
-    g.fillRoundRect(b.x + b.w - 74, b.y + 6, 32, 28, 6, CHIP);
-    g.textMid(b.x + b.w - 58, b.y + 20, "-", F18B, TEXT, AL_C);
-    g.fillRoundRect(b.x + b.w - 38, b.y + 6, 32, 28, 6, CHIP);
-    g.textMid(b.x + b.w - 22, b.y + 20, "+", F18B, TEXT, AL_C);
+    g.text(b.x + 10, b.y + 30, t, F13B, TEXT);
+    g.fillRoundRect(b.x + b.w - 74, b.y + 4, 32, 28, 6, CHIP);
+    g.textMid(b.x + b.w - 58, b.y + 18, "-", F18B, TEXT, AL_C);
+    g.fillRoundRect(b.x + b.w - 38, b.y + 4, 32, 28, 6, CHIP);
+    g.textMid(b.x + b.w - 22, b.y + 18, "+", F18B, TEXT, AL_C);
   }
   button(g, SB[0], "WHEEL"); button(g, SB[1], "TOUCH CAL"); button(g, SB[2], "INFO");
 }
@@ -864,6 +887,8 @@ static void adjust(Settings &c, int i, int d) {
   case 7: clampAdd(c.backlight, 1, 1, 5); break;
   case 8: c.wifi = !c.wifi; break;
   case 9: clampAdd(c.tzHours, 1, -12, 14); break;
+  case 10: c.rollout = !c.rollout; break;
+  case 11: c.gpsRate = !c.gpsRate; break;
   }
 }
 static const char *const WROW[5] = {"Tyre width (mm)", "Tyre aspect (%)", "Rim (inch)", "Correction (%)", "Gear ratio"};
@@ -924,14 +949,15 @@ static void infoPage(Gfx &g, const UiState &s) {
   g.text(14, y, "Controller", F11, MUTED); g.text(140, y, t, F13B, s.linked ? GREEN : RED); y += 24;
   snprintf(t, 96, "%u good · %u bad", (unsigned)s.frames, (unsigned)s.errors);
   g.text(14, y, "Frames", F11, MUTED); g.text(140, y, t, F13B, TEXT); y += 24;
-  if (s.gpsSeen) snprintf(t, 96, "%s · %d sats · %.0f Hz", s.gpsFix ? "fix" : "no fix", s.gpsSats, s.gpsHz);
+  if (s.gpsSeen) snprintf(t, 96, "%s%s · %d sats · %.0f Hz · ±%.1f km/h", s.gpsUbx ? "u-blox " : "NMEA ", s.gpsFix ? "fix" : "no fix", s.gpsSats, s.gpsHz, s.gpsSAcc);
   else snprintf(t, 96, "not connected (optional)");
   g.text(14, y, "GPS", F11, MUTED); g.text(140, y, t, F13B, s.gpsFix ? GREEN : TEXT); y += 24;
   snprintf(t, 96, "%s · %u KB free", s.sd ? "SD card" : "internal", (unsigned)s.fsFreeKB);
   g.text(14, y, "Log storage", F11, MUTED); g.text(140, y, t, F13B, TEXT); y += 24;
   snprintf(t, 96, "%u KB", (unsigned)s.heapKB);
   g.text(14, y, "Free memory", F11, MUTED); g.text(140, y, t, F13B, TEXT); y += 24;
-  g.text(14, 300, "Wiring: VOTOL TX -> IO35, VOTOL RX <- IO22, GND - GND. GPS TX -> IO21.", F10, MUTED);
+  g.text(14, 288, "VOTOL TX -> IO35 · VOTOL RX <- IO22 · GND", F10, MUTED);
+  g.text(14, 304, "GPS TX -> IO21 · GPS RX <- IO22 (same wire as VOTOL RX) · 3.3V · GND", F10, MUTED);
 }
 static void bootPage(Gfx &g, const UiState &s) {
   g.fillRect(0, 0, 480, 320, BG);
@@ -1068,7 +1094,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     if (hit(SB[0], x, y)) { go(PG_WHEEL); return true; }
     if (hit(SB[1], x, y)) { a.touchCal = true; return true; }
     if (hit(SB[2], x, y)) { go(PG_INFO); return true; }
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < NSROW; i++) {
       Btn b = srow(i);
       if (hit({b.x + b.w - 76, b.y, 38, b.h}, x, y)) { adjust(c, i, -1); a.settingsChanged = true; return true; }
       if (hit({b.x + b.w - 38, b.y, 38, b.h}, x, y)) { adjust(c, i, +1); a.settingsChanged = true; return true; }

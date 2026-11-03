@@ -4,6 +4,8 @@
 #include <Preferences.h>
 #include <esp_heap_caps.h>
 #include <sys/time.h>
+#include <cmath>
+#include <functional>
 #include "config.h"
 #include "display.h"
 #include "gps.h"
@@ -48,7 +50,7 @@ static void shortWhen(char *out, int n) {  // "03 Nov 18:42"
 }
 
 // -------------------------------------------------------------- settings ----
-static const uint8_t CFG_VER = 2;
+static const uint8_t CFG_VER = 3;
 static void loadSettings() {
   Preferences p;
   p.begin("voltol", true);
@@ -121,12 +123,102 @@ static void newTrip(bool fromBoot) {
 }
 
 // ------------------------------------------------------------------- GPS ----
+// u-blox NAV-PVT preferred (speed accuracy + satellite time of each fix);
+// any NMEA receiver works as a fallback.
 static gps::Nmea nmea;
-static uint32_t gpsLastRmc = 0, gpsRmcCount = 0, gpsHzAt = 0, gpsBaudAt = 0;
+static gps::Ubx ubx;
+static uint32_t gpsLast = 0, gpsCount = 0, gpsHzAt = 0, gpsBaudAt = 0, gpsCfgAt = 0;
 static int gpsBaudIx = 0;
-static const uint32_t GPS_BAUDS[3] = {9600, 115200, 38400};
-static bool gpsUsable() { return S.gpsFix && millis() - gpsLastRmc < 1500; }
+static const uint32_t GPS_BAUDS[3] = {115200, 9600, 38400};
+static double gpsOffset = 1e18;  // millis-clock seconds minus GPS seconds (smallest seen)
+static uint32_t lastItow = 0;
+static bool gpsUsable() { return S.gpsFix && millis() - gpsLast < 1500; }
 static bool useGps() { return cfg.speedSrc != 0 && gpsUsable(); }
+// Good enough to time a drag run from GPS.
+static bool gpsDragOk() { return gpsUsable() && S.gpsSats >= 6 && (!S.gpsUbx || S.gpsSAcc <= 1.0f); }
+static bool dragOnGps() { return cfg.speedSrc == 1 || (cfg.speedSrc == 2 && (gpsUsable() || !vlink::alive())); }
+static void armDrag() {
+  drag.cfg = dragOnGps() ? ride::DragCfg::gps(cfg.rollout) : ride::DragCfg::rpm(cfg.rollout);
+  drag.arm();
+  S.dragWaitGps = drag.cfg.fitN > 2 && !gpsDragOk();
+}
+// One GPS speed sample (t = seconds on the millis clock).
+static void gpsSample(double t, float kmh) {
+  gpsLast = millis();
+  gpsCount++;
+  S.gpsSeen = true;
+  S.gpsKmh = kmh < 0 ? 0 : kmh;
+  bool onGps = drag.cfg.fitN > 2;  // armed in GPS mode
+  S.dragWaitGps = onGps && drag.state == ride::DragTimer::ARMED && !gpsDragOk();
+  if (onGps && (gpsDragOk() || drag.state == ride::DragTimer::RUN)) drag.feed(t, S.gpsKmh, S.live.amp, S.live.volt);
+  // no controller: the GPS drives the dashboard and the trip
+  if (useGps() || !vlink::alive()) {
+    S.src = useGps();
+    if (!vlink::alive() && S.gpsFix) {
+      S.kmh = S.gpsKmh;
+      S.speedOk = true;
+      S.trip.add(t, S.kmh, 0, 0);
+      S.odoKm = odoBase + S.trip.distM / 1000;
+    }
+  }
+}
+static void gpsClock(uint16_t y, uint8_t mo, uint8_t d, uint8_t h, uint8_t mi, uint8_t se) {
+  if (timeKnown || y < 2024) return;
+  struct tm tm = {};
+  tm.tm_year = y - 1900; tm.tm_mon = mo - 1; tm.tm_mday = d; tm.tm_hour = h; tm.tm_min = mi; tm.tm_sec = se;
+  setenv("TZ", "UTC0", 1); tzset();
+  setClock((uint64_t)mktime(&tm) * 1000, cfg.tzHours * 60);
+}
+static void gpsPoll() {
+  while (Serial1.available()) {
+    uint8_t b = (uint8_t)Serial1.read();
+    if (ubx.push(b)) {
+      const gps::Pvt &p = ubx.pvt;
+      LOCK();
+      S.gpsUbx = true;
+      S.gpsFix = p.fixOk;
+      S.gpsSats = p.numSV;
+      S.gpsSAcc = p.sAccKmh;
+      // GPS time of the fix mapped onto the millis clock: exact spacing
+      // between samples, independent of serial / loop delays.
+      double tg = p.iTOW / 1000.0, tm = millis() / 1000.0;
+      if (p.iTOW < lastItow || tm - tg < gpsOffset - 5) gpsOffset = tm - tg;  // new week / first fix
+      if (tm - tg < gpsOffset) gpsOffset = tm - tg;
+      lastItow = p.iTOW;
+      gpsSample(tg + gpsOffset, p.kmh);
+      if (p.timeValid) gpsClock(p.year, p.mon, p.day, p.hour, p.min, p.sec);
+      UNLOCK();
+    }
+    if (nmea.push((char)b) && !S.gpsUbx) {
+      LOCK();
+      S.gpsFix = nmea.fix.valid;
+      S.gpsSats = nmea.fix.sats;
+      S.gpsSAcc = 99;
+      gpsSample(millis() / 1000.0, nmea.fix.kmh);
+      uint32_t d = nmea.fix.dateDdmmyy, h = nmea.fix.utcHhmmss;
+      if (nmea.fix.valid && d) gpsClock(2000 + d % 100, (d / 100) % 100, d / 10000, h / 10000, (h / 100) % 100, h % 100);
+      UNLOCK();
+    }
+  }
+  uint32_t now = millis();
+  if (now - gpsHzAt >= 2000) {
+    S.gpsHz = gpsCount * 1000.0f / (now - gpsHzAt);
+    gpsCount = 0; gpsHzAt = now;
+    if (now - gpsLast > 3000) { S.gpsFix = false; S.dragWaitGps = drag.cfg.fitN > 2 && drag.state == ride::DragTimer::ARMED; }
+    // nothing heard: try the other baud rates, and re-send the u-blox setup
+    if (now - gpsLast > 4000 && now - gpsBaudAt > 4000) {
+      gpsBaudIx = (gpsBaudIx + 1) % 3;
+      Serial1.updateBaudRate(GPS_BAUDS[gpsBaudIx]);
+      gpsBaudAt = now;
+    }
+    if (now - gpsCfgAt > 15000 && (!S.gpsUbx || now - gpsLast > 4000 || S.gpsHz < (cfg.gpsRate ? 15 : 7))) {
+      gpsCfgAt = now;
+      vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
+      gpsBaudIx = 0;
+      Serial1.updateBaudRate(GPS_BAUDS[0]);
+    }
+  }
+}
 
 // ----------------------------------------------------------- live frames ----
 static ride::SecAgg sec;
@@ -155,11 +247,12 @@ static void onLive(const votol::Live &d, uint32_t ms) {
   bool g = useGps();
   S.src = g;
   S.kmh = g ? S.gpsKmh : rpmKmh;
+  S.speedOk = true;
   S.kw = d.volt * d.amp / 1000;
   S.soc = ride::socFromVolt(d.volt, cfg.cells, cfg.cellEmptyMv / 1000.0f, cfg.cellFullMv / 1000.0f);
   S.trip.add(t, S.kmh, d.amp, d.volt);
   S.odoKm = odoBase + S.trip.distM / 1000;
-  if (!g) drag.feed(t, rpmKmh, d.amp, d.volt);
+  if (drag.cfg.fitN <= 2) drag.feed(t, rpmKmh, d.amp, d.volt);  // armed in RPM mode
   logger::Row row = {d, S.kmh, S.trip.distM};
   char ts[32];
   stamp(ts, sizeof ts, ms);
@@ -232,17 +325,184 @@ static void onWrite(bool ok, const char *msg) {
 }
 
 // ------------------------------------------------------------------- web ----
-static String liveJson() {
-  LOCK();
-  char f[80], b[400];
+// JSON API used by the web dashboard (src/web.cpp, assets/web/index.html).
+struct J {
+  String s;
+  bool first = true;
+  J &k(const char *key) { s += first ? "" : ","; first = false; s += "\""; s += key; s += "\":"; return *this; }
+  J &n(const char *key, double v, int dec = 1) { k(key); char b[24]; snprintf(b, 24, "%.*f", dec, std::isfinite(v) ? v : 0.0); s += b; return *this; }
+  J &i(const char *key, long v) { k(key); s += String(v); return *this; }
+  J &b(const char *key, bool v) { k(key); s += v ? "true" : "false"; return *this; }
+  J &t(const char *key, const char *v) {
+    k(key); s += "\"";
+    for (const char *p = v; *p; p++) { if (*p == '"' || *p == '\\') s += '\\'; s += *p; }
+    s += "\""; return *this;
+  }
+  J &raw(const char *key, const String &v) { k(key); s += v; return *this; }
+  String obj() { return "{" + s + "}"; }
+};
+static String splitsJson(const ride::DragResult &r) {
+  String o = "[";
+  for (int i = 0; i < ride::SPLITS; i++) {
+    J j;
+    j.b("done", r.s[i].done).n("t", r.s[i].t, 3).n("v", r.s[i].trapKmh, 1).n("a", r.s[i].peakA, 0);
+    o += (i ? "," : "") + j.obj();
+  }
+  return o + "]";
+}
+static const char *const DRAG_STATE[6] = {"IDLE", "ARMED", "READY", "RUN", "DONE", "ABORTED"};
+static String liveJsonLocked() {
+  char f[96];
   votol::faultText(S.live.faults, f, sizeof f);
-  snprintf(b, sizeof b,
-           "{\"linked\":%s,\"kmh\":%.1f,\"rpm\":%d,\"volt\":%.1f,\"amp\":%.1f,\"kw\":%.2f,\"soc\":%d,\"tc\":%d,\"tm\":%d,"
-           "\"trip\":%.2f,\"status\":\"%s\",\"fault\":\"%s\",\"hz\":%.1f}",
-           S.linked ? "true" : "false", S.kmh, S.live.rpm, S.live.volt, S.live.amp, S.kw, S.soc, S.live.tCtrl,
-           S.live.tMotor, S.trip.distM / 1000, votol::STATUS_NAMES[S.live.status < 8 ? S.live.status : 0], f, S.hz);
+  J g; g.b("seen", S.gpsSeen).b("fix", S.gpsFix).b("ubx", S.gpsUbx).i("sats", S.gpsSats).n("hz", S.gpsHz).n("acc", S.gpsSAcc, 2);
+  J tr; tr.n("km", S.trip.distM / 1000, 2).n("max", S.trip.maxKmh).n("avg", S.trip.avgKmh()).n("maxA", S.trip.maxA)
+         .n("wh", S.trip.wh, 0).n("whkm", S.trip.whPerKm());
+  J d; d.t("state", DRAG_STATE[drag.state]).n("el", drag.elapsed(millis() / 1000.0), 2).n("dist", drag.distance())
+        .n("spd", drag.speedKmh()).b("gps", drag.cfg.fitN > 2).b("wait", S.dragWaitGps).b("roll", cfg.rollout)
+        .raw("sp", splitsJson(drag.r)).n("peakA", drag.r.peakA, 0).n("peakKw", drag.r.peakKw).b("spin", drag.r.wheelspin)
+        .b("haveBest", S.haveBest).raw("best", splitsJson(S.best)).t("bestWhen", S.bestWhen);
+  char gs[2] = {S.linked ? "LMHS"[S.live.gear()] : '-', 0};
+  J j;
+  j.b("linked", S.linked).b("speedOk", S.speedOk).n("kmh", S.kmh).i("rpm", S.live.rpm).n("volt", S.live.volt)
+   .n("amp", S.live.amp).n("kw", S.kw, 2).i("soc", S.soc).i("tc", S.live.tCtrl).i("tm", S.live.tMotor)
+   .t("gear", gs)
+   .t("status", votol::STATUS_NAMES[S.live.status < 8 ? S.live.status : 0]).i("faults", S.live.faults).t("fault", f)
+   .n("hz", S.hz).i("baud", S.baud).i("src", S.src).raw("gps", g.obj()).raw("trip", tr.obj()).n("odo", S.odoKm, 1)
+   .t("fw", S.fw).b("sd", S.sd).i("freeKB", S.fsFreeKB).i("maxKmh", cfg.maxKmh).i("maxAmp", cfg.maxAmp)
+   .i("dash", cfg.dash).raw("drag", d.obj());
+  return j.obj();
+}
+static String listsJson() {
+  String t = "[", f = "[", r = "[", b = "[";
+  for (int i = 0; i < S.tripN; i++) {
+    J j; const TripRow &x = S.trips[i];
+    j.i("id", x.id).t("when", x.when).n("km", x.km, 2).n("max", x.maxKmh).n("maxA", x.maxA).n("whkm", x.whKm);
+    t += (i ? "," : "") + j.obj();
+  }
+  for (int i = 0; i < S.faultN; i++) {
+    J j; const FaultRow &x = S.faults[i]; char n[80]; votol::faultText(x.code, n, sizeof n);
+    j.t("when", x.when).b("set", x.set).t("name", n).n("kmh", x.kmh).n("amp", x.amp).n("volt", x.volt);
+    f += (i ? "," : "") + j.obj();
+  }
+  for (int i = 0; i < S.runN; i++) {
+    J j; const DragRow &x = S.runs[i];
+    String ts = "[", vs = "[";
+    for (int k = 0; k < 4; k++) { ts += String(k ? "," : "") + String(x.t[k], 3); vs += String(k ? "," : "") + String(x.trap[k], 1); }
+    j.t("when", x.when).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
+    r += (i ? "," : "") + j.obj();
+  }
+  for (int i = 0; i < S.backupN; i++) {
+    J j; j.i("id", S.backups[i].id).t("when", S.backups[i].when).i("sum", S.backups[i].sum);
+    b += (i ? "," : "") + j.obj();
+  }
+  String g = "{\"kmh\":[", a = "\"amp\":[";
+  for (int i = 0; i < S.gN; i++) { g += String(i ? "," : "") + String(S.gKmh[i], 1); a += String(i ? "," : "") + String(S.gAmp[i], 1); }
+  J j; j.raw("trips", t + "]").raw("faults", f + "]").raw("runs", r + "]").raw("backups", b + "]")
+       .raw("graph", g + "]," + a + "]}");
+  return j.obj();
+}
+static String paramsJson() {
+  String fl = "[";
+  bool have = S.params.complete();
+  for (int i = 0; i < votol::PARAM_COUNT && have; i++) {
+    const votol::ParamDef &d = votol::PARAMS[i];
+    J j;
+    j.i("i", i).t("g", d.group).t("n", d.name).t("u", d.unit).i("d", d.dec)
+     .n("v", votol::shown(S.edit, d), d.dec).n("o", votol::shown(S.params.b, d), d.dec)
+     .i("r", votol::getRaw(S.edit, d)).i("ro", votol::getRaw(S.params.b, d)).i("st", d.step).i("mn", d.min).i("mx", d.max);
+    fl += (i ? "," : "") + j.obj();
+  }
+  J j;
+  j.b("have", have).b("busy", S.busy).t("when", S.paramsWhen).i("sum", have ? S.params.checkSum() : 0)
+   .t("msg", S.msg).i("kind", S.msgKind).b("stopped", S.linked && S.live.rpm == 0).b("linked", S.linked)
+   .i("lastBackup", S.backupN ? S.backups[0].id : 0).raw("fields", fl + "]");
+  return j.obj();
+}
+// Settings exposed to the web page: key, pointer, min, max.
+struct SetDef { const char *k; int lo, hi; };
+static const SetDef SETS[] = {{"dash", 0, 2}, {"speedSrc", 0, 2}, {"logRate", 0, 4}, {"cells", 6, 40},
+  {"cellEmptyMv", 2000, 4000}, {"cellFullMv", 3000, 4400}, {"maxKmh", 40, 300}, {"maxAmp", 50, 1000},
+  {"backlight", 1, 5}, {"wifi", 0, 1}, {"tzHours", -12, 14}, {"rollout", 0, 1}, {"gpsRate", 0, 1},
+  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}};
+static int setGet(int i) {
+  switch (i) {
+  case 0: return cfg.dash; case 1: return cfg.speedSrc; case 2: return cfg.logRate; case 3: return cfg.cells;
+  case 4: return cfg.cellEmptyMv; case 5: return cfg.cellFullMv; case 6: return cfg.maxKmh; case 7: return cfg.maxAmp;
+  case 8: return cfg.backlight; case 9: return cfg.wifi; case 10: return cfg.tzHours; case 11: return cfg.rollout;
+  case 12: return cfg.gpsRate; case 13: return cfg.tyreW; case 14: return cfg.tyreA; case 15: return cfg.tyreR;
+  case 16: return cfg.wheelCorr; default: return cfg.ratioX100;
+  }
+}
+static void setPut(int i, int v) {
+  v = v < SETS[i].lo ? SETS[i].lo : v > SETS[i].hi ? SETS[i].hi : v;
+  switch (i) {
+  case 0: cfg.dash = v; break; case 1: cfg.speedSrc = v; break; case 2: cfg.logRate = v; break; case 3: cfg.cells = v; break;
+  case 4: cfg.cellEmptyMv = v; break; case 5: cfg.cellFullMv = v; break; case 6: cfg.maxKmh = v; break;
+  case 7: cfg.maxAmp = v; break; case 8: cfg.backlight = v; break;
+#ifdef VOLTOL_HEADLESS
+  case 9: cfg.wifi = 1; break;  // the web page is the only screen
+#else
+  case 9: cfg.wifi = v; break;
+#endif
+  case 10: cfg.tzHours = v; break; case 11: cfg.rollout = v; break;
+  case 12: cfg.gpsRate = v; vlink::requestGpsConfig(v ? 25 : 10); break; case 13: cfg.tyreW = v; break;
+  case 14: cfg.tyreA = v; break; case 15: cfg.tyreR = v; break; case 16: cfg.wheelCorr = v; break;
+  default: cfg.ratioX100 = v; break;
+  }
+}
+static String settingsJson() {
+  J j;
+  for (int i = 0; i < (int)(sizeof SETS / sizeof SETS[0]); i++) j.i(SETS[i].k, setGet(i));
+  j.n("circMm", cfg.circMm(), 0).n("kmhAt1000", ride::rpmToKmh(1000, cfg.circMm(), cfg.ratioX100 / 100.0f));
+#ifdef VOLTOL_HEADLESS
+  j.b("headless", true);
+#else
+  j.b("headless", false);
+#endif
+  return j.obj();
+}
+static void doActions(UiActions &a);
+static String api(const String &path, const std::function<String(const char *)> &arg, int &code) {
+  code = 200;
+  LOCK();
+  String out;
+  UiActions a;
+  if (path == "/api/live") out = liveJsonLocked();
+  else if (path == "/api/lists") out = listsJson();
+  else if (path == "/api/params") out = paramsJson();
+  else if (path == "/api/settings") out = settingsJson();
+  else if (path == "/api/drag") {
+    String c = arg("cmd");
+    if (c == "arm") a.armDrag = true; else a.cancelDrag = true;
+    doActions(a);
+    out = liveJsonLocked();
+  } else if (path == "/api/params/read") { if (!S.busy) a.readParams = true; doActions(a); out = paramsJson(); }
+  else if (path == "/api/params/set") {
+    int i = arg("i").toInt();
+    if (S.params.complete() && i >= 0 && i < votol::PARAM_COUNT) {
+      const votol::ParamDef &d = votol::PARAMS[i];
+      votol::setRaw(S.edit, d, arg("raw").toInt());
+    }
+    out = paramsJson();
+  } else if (path == "/api/params/undo") { memcpy(S.edit, S.params.b, votol::PARAM_BYTES); out = paramsJson(); }
+  else if (path == "/api/params/restore") { a.restoreBackup = arg("id").toInt(); doActions(a); out = paramsJson(); }
+  else if (path == "/api/params/write") {
+    if (arg("confirm") != "yes") { code = 400; out = "{\"error\":\"confirm=yes required\"}"; }
+    else if (!S.linked || S.live.rpm != 0) { code = 409; out = "{\"error\":\"Stop the bike first (0 RPM)\"}"; }
+    else if (S.busy) { code = 409; out = "{\"error\":\"busy\"}"; }
+    else { a.writeParams = true; doActions(a); out = paramsJson(); }
+  } else if (path == "/api/set") {
+    String k = arg("k");
+    for (int i = 0; i < (int)(sizeof SETS / sizeof SETS[0]); i++)
+      if (k == SETS[i].k) { setPut(i, arg("v").toInt()); a.settingsChanged = true; }
+    doActions(a);
+    needFull = true;
+    out = settingsJson();
+  } else if (path == "/api/clearfaults") { a.clearFaults = true; doActions(a); out = "{}"; }
+  else if (path == "/api/newtrip") { a.newTrip = true; doActions(a); out = "{}"; }
+  else { code = 404; out = "{\"error\":\"unknown\"}"; }
   UNLOCK();
-  return String(b);
+  return out;
 }
 
 // ------------------------------------------------------------------ setup ----
@@ -271,11 +531,17 @@ void setup() {
     }
     p.end();
   }
+  Serial1.setRxBufferSize(2048);
   Serial1.begin(GPS_BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-  web::begin(liveJson, setClock);
+  web::begin(api, setClock);
+#ifdef VOLTOL_HEADLESS
+  cfg.wifi = 1;
+#endif
   web::enable(cfg.wifi);
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
+  vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
+  gpsCfgAt = millis();
   delay(1200);
   ui::go(PG_DASH);
   needFull = true;
@@ -294,49 +560,24 @@ static void doActions(UiActions &a) {
     else snprintf(S.msg, sizeof S.msg, "Backup #%d not found", a.restoreBackup);
     S.msgKind = 0;
   }
-  if (a.armDrag) { drag.arm(); dragSaved = -1; }
-  if (a.cancelDrag) drag.cancel();
-  if (a.settingsChanged) { cfgDirtyAt = millis(); displayBacklight(cfg.backlight); web::enable(cfg.wifi); }
+  if (a.armDrag) { armDrag(); dragSaved = -1; }
+  if (a.cancelDrag) { drag.cancel(); S.dragWaitGps = false; }
+  if (a.settingsChanged) {
+#ifdef VOLTOL_HEADLESS
+    cfg.wifi = 1;
+#endif
+    cfgDirtyAt = millis(); displayBacklight(cfg.backlight); web::enable(cfg.wifi);
+  }
   if (a.newTrip) newTrip(false);
 }
 
 void loop() {
   uint32_t now = millis();
   web::loop();
-  // GPS
-  while (Serial1.available()) {
-    if (nmea.push((char)Serial1.read())) {
-      LOCK();
-      gpsLastRmc = millis();
-      gpsRmcCount++;
-      S.gpsSeen = true;
-      S.gpsFix = nmea.fix.valid;
-      S.gpsSats = nmea.fix.sats;
-      S.gpsKmh = nmea.fix.kmh;
-      if (useGps()) drag.feed(gpsLastRmc / 1000.0, S.gpsKmh, S.live.amp, S.live.volt);
-      if (!timeKnown && nmea.fix.valid && nmea.fix.dateDdmmyy) {
-        struct tm tm = {};
-        uint32_t d = nmea.fix.dateDdmmyy, h = nmea.fix.utcHhmmss;
-        tm.tm_mday = d / 10000; tm.tm_mon = (d / 100) % 100 - 1; tm.tm_year = 100 + d % 100;
-        tm.tm_hour = h / 10000; tm.tm_min = (h / 100) % 100; tm.tm_sec = h % 100;
-        setenv("TZ", "UTC0", 1); tzset();
-        setClock((uint64_t)mktime(&tm) * 1000, cfg.tzHours * 60);
-      }
-      UNLOCK();
-    }
-  }
-  if (now - gpsHzAt >= 2000) {
-    S.gpsHz = gpsRmcCount * 1000.0f / (now - gpsHzAt);
-    gpsRmcCount = 0; gpsHzAt = now;
-    if (!S.gpsSeen && now - gpsBaudAt > 4000) {  // look for the GPS at other baud rates
-      gpsBaudIx = (gpsBaudIx + 1) % 3;
-      Serial1.updateBaudRate(GPS_BAUDS[gpsBaudIx]);
-      gpsBaudAt = now;
-    }
-    if (now - gpsLastRmc > 3000) S.gpsFix = false;
-  }
+  gpsPoll();
   // link status
   S.linked = vlink::alive();
+  if (!S.linked && !gpsUsable()) S.speedOk = false;
   S.hz = vlink::hz();
   S.baud = vlink::baud();
   S.frames = vlink::goodFrames();

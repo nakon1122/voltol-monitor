@@ -18,6 +18,8 @@ struct Settings {
   uint16_t maxKmh = 120, maxAmp = 200;
   uint8_t backlight = 4;    // 1..5
   int8_t tzHours = 7;       // local time = UTC + this (GPS time)
+  uint8_t rollout = 0;      // drag: 1 = clock starts after the first foot (drag-strip style)
+  uint8_t gpsRate = 0;      // 0 = 10 Hz, 1 = 25 Hz (u-blox M10)
   uint8_t wifi = 1;
   float circMm() const {
     return ride::tyreCircMm(tyreW, tyreA, tyreR) * (1000 + wheelCorr) / 1000.0f;
@@ -40,9 +42,11 @@ struct UiState {
   float kmh = 0, kw = 0;
   int soc = 0;
   uint8_t src = 0;  // speed source in use: 0 RPM, 1 GPS
-  bool gpsSeen = false, gpsFix = false;
+  bool speedOk = false;  // speed available (controller or GPS)
+  bool gpsSeen = false, gpsFix = false, gpsUbx = false;
   int gpsSats = 0;
-  float gpsHz = 0, gpsKmh = 0;
+  float gpsHz = 0, gpsKmh = 0, gpsSAcc = 99;  // speed accuracy, km/h
+  bool dragWaitGps = false;  // armed for GPS but signal not good enough yet
   ride::Trip trip;
   double odoKm = 0;
   char clock[8] = "";      // "18:42" when time is known

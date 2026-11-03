@@ -40,11 +40,26 @@ struct DragResult {
   bool finished() const { return s[SPLITS - 1].done; }
 };
 
+// Launch detection. RPM: any wheel movement starts the clock. GPS reports a
+// little speed even when parked, so: READY after <= 1 km/h for 1 s, start when
+// above 3 km/h, then the launch moment is extrapolated back to 0 km/h.
+struct DragCfg {
+  double readyKmh = 0.05, holdS = 0, startKmh = 0.05;
+  int fitN = 2;          // samples used to find the launch (least squares)
+  bool rollout = false;  // drag-strip style: clock starts after the first foot
+  static DragCfg rpm(bool roll) { DragCfg c; c.rollout = roll; return c; }
+  static DragCfg gps(bool roll) {
+    DragCfg c; c.readyKmh = 1.0; c.holdS = 1.0; c.startKmh = 3.0; c.fitN = 6; c.rollout = roll; return c;
+  }
+};
+static const double ROLLOUT_M = 0.3048;
+
 class DragTimer {
 public:
   enum State { IDLE, ARMED, READY, RUN, DONE, ABORTED };
   State state = IDLE;
   DragResult r;
+  DragCfg cfg;
 
   void arm() { state = ARMED; reset(); }
   void cancel() { state = IDLE; }
@@ -53,30 +68,43 @@ public:
     double v = kmh / 3.6;
     switch (state) {
     case ARMED:
-      if (v <= 0.05) { state = READY; tPrev = t; }
+      if (kmh <= cfg.readyKmh) {
+        if (holdFrom < 0) holdFrom = t;
+        if (t - holdFrom >= cfg.holdS) { state = READY; tPrev = t; }
+      } else holdFrom = -1;
       return;
     case READY:
-      if (v <= 0.05) { tPrev = t; return; }
+      if (kmh < cfg.startKmh) { if (kmh <= cfg.readyKmh) tPrev = t; return; }
       state = RUN;
       launchLo = tPrev;           // still at rest here
-      first = true; ft = t; fv = v; fa = amp;
-      ts = tPrev;                 // provisional launch until the 2nd sample
+      first = true; nb = 0;
+      ts = tPrev;                 // provisional launch until the fit is done
       stats(amp, volt);
+      bt[nb] = t; bv[nb] = v; ba[nb] = amp; nb++;
       return;
     case RUN:
       stats(amp, volt);
       if (first) {
-        // Constant-acceleration launch: extrapolate back to v = 0.
-        double est = ft - (v > fv ? fv * (t - ft) / (v - fv) : (ft - launchLo));
-        if (est < launchLo) est = launchLo;
-        if (est > ft) est = ft;
+        bt[nb] = t; bv[nb] = v; ba[nb] = amp; nb++;
+        if (nb < cfg.fitN && nb < 8) return;
+        // Constant-acceleration launch: least-squares line through the first
+        // samples, extrapolated back to v = 0.
+        double mt = 0, mv = 0, stt = 0, stv = 0;
+        for (int i = 0; i < nb; i++) { mt += bt[i]; mv += bv[i]; }
+        mt /= nb; mv /= nb;
+        for (int i = 0; i < nb; i++) { stt += (bt[i] - mt) * (bt[i] - mt); stv += (bt[i] - mt) * (bv[i] - mv); }
+        double slope = stt > 0 ? stv / stt : 0;
+        double est = slope > 0 ? mt - mv / slope : launchLo;
+        // The last "still" sample may already be rolling at up to readyKmh.
+        double lo = launchLo - (slope > 0 ? cfg.readyKmh / 3.6 / slope : 0);
+        if (est < lo) est = lo;
+        if (est > bt[0]) est = bt[0];
         ts = est;
         first = false;
         dist = 0; lt = ts; lv = 0;
-        segment(ft, fv, fa);
-      }
-      segment(t, v, amp);
-      if (v <= 0.05) { if (stopAt < 0) stopAt = t; else if (t - stopAt > 2) state = ABORTED; }
+        for (int i = 0; i < nb; i++) segment(bt[i], bv[i], ba[i]);
+      } else segment(t, v, amp);
+      if (kmh <= cfg.readyKmh) { if (stopAt < 0) stopAt = t; else if (t - stopAt > 2) state = ABORTED; }
       else stopAt = -1;
       if (t - ts > 60) state = ABORTED;
       if (r.finished()) state = DONE;
@@ -85,16 +113,32 @@ public:
     }
   }
   // Live read-outs while running.
-  double elapsed(double tNow) const { return state == RUN || state == DONE ? (state == DONE ? r.s[SPLITS - 1].t : tNow - ts) : 0; }
+  double elapsed(double tNow) const {
+    if (state == DONE) return r.s[SPLITS - 1].t;
+    if (state != RUN) return 0;
+    double e = tNow - ts - (cfg.rollout ? (rollT >= 0 ? rollT : tNow - ts) : 0);
+    return e > 0 ? e : 0;
+  }
   double distance() const { return dist; }
   double speedKmh() const { return lv * 3.6; }
 
 private:
-  double tPrev = 0, launchLo = 0, ts = 0, ft = 0, fv = 0, lt = 0, lv = 0, dist = 0, stopAt = -1;
-  float fa = 0, secPeak = 0;
-  int next = 0;
+  double tPrev = 0, launchLo = 0, ts = 0, lt = 0, lv = 0, dist = 0, stopAt = -1, holdFrom = -1, rollT = -1;
+  double bt[8], bv[8];
+  float ba[8], secPeak = 0;
+  int next = 0, nb = 0;
   bool first = false;
-  void reset() { r = DragResult(); next = 0; dist = 0; lv = 0; stopAt = -1; secPeak = 0; }
+  void reset() { r = DragResult(); next = 0; dist = 0; lv = 0; stopAt = -1; secPeak = 0; holdFrom = -1; rollT = -1; }
+  // time (s from launch) at which distance `need` from the segment start is reached
+  static double solve(double need, double lv, double k, double dt) {
+    double tau;
+    if (fabs(k) < 1e-9) tau = lv > 0 ? need / lv : dt;
+    else {
+      double disc = lv * lv + 2 * k * need;
+      tau = disc > 0 ? (-lv + sqrt(disc)) / k : dt;
+    }
+    return tau < 0 ? 0 : tau > dt ? dt : tau;
+  }
   void stats(float amp, float volt) {
     if (amp > r.peakA) r.peakA = amp;
     if (amp * volt / 1000 > r.peakKw) r.peakKw = amp * volt / 1000;
@@ -108,18 +152,12 @@ private:
     double k = (v - lv) / dt;
     if (k > 1.2 * 9.81) r.wheelspin = true;
     double dEnd = dist + (lv + v) * 0.5 * dt;
+    if (rollT < 0 && ROLLOUT_M <= dEnd) rollT = lt + solve(ROLLOUT_M - dist, lv, k, dt) - ts;
     while (next < SPLITS && SPLIT_M[next] <= dEnd) {
-      double need = SPLIT_M[next] - dist, tau;
-      if (fabs(k) < 1e-9) tau = lv > 0 ? need / lv : dt;
-      else {
-        double disc = lv * lv + 2 * k * need;
-        tau = disc > 0 ? (-lv + sqrt(disc)) / k : dt;
-      }
-      if (tau < 0) tau = 0;
-      if (tau > dt) tau = dt;
+      double tau = solve(SPLIT_M[next] - dist, lv, k, dt);
       Split &s = r.s[next];
       s.done = true;
-      s.t = lt + tau - ts;
+      s.t = lt + tau - ts - (cfg.rollout ? rollT : 0);
       s.trapKmh = (lv + k * tau) * 3.6;
       s.peakA = secPeak;
       secPeak = 0;

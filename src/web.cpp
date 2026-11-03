@@ -12,35 +12,11 @@
 namespace web {
 static WebServer srv(80);
 static bool on = false;
-static LiveJsonFn liveJson;
+static ApiFn apiFn;
 static TimeFn setTime;
 static char ssidBuf[24];
 
-static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>VOLTOL Monitor</title>
-<style>body{margin:0;font-family:system-ui,sans-serif;background:#05070A;color:#E8EDF2}
-header{background:#0B1016;padding:12px 16px;font-weight:800;letter-spacing:1px}header b{color:#FFC400}
-main{padding:12px 16px;max-width:720px}.g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.c{background:#0F161E;border-radius:10px;padding:10px}.l{font-size:11px;color:#6E7C89}.v{font-size:22px;font-weight:800}
-a{color:#4FC3FF}table{width:100%;border-collapse:collapse;font-size:14px}td{padding:6px 4px;border-bottom:1px solid #1A232D}
-button{background:#1A222B;color:#E8EDF2;border:0;border-radius:8px;padding:8px 12px}h3{margin:18px 0 8px}</style></head>
-<body><header><b>&#9889;</b> VOLTOL Monitor</header><main>
-<div class="g" id="live"></div><p class="l" id="st"></p>
-<h3>Log files</h3><table id="files"></table>
-<h3>Firmware update</h3><form method="POST" action="/update" enctype="multipart/form-data">
-<input type="file" name="fw" accept=".bin"> <button>Upload</button></form>
-<p class="l">Use the *_APP_UPDATE.bin file. Settings and logs are kept.</p></main>
-<script>
-fetch('/api/time?t='+Date.now()+'&tz='+(-new Date().getTimezoneOffset()));
-const L=[['km/h','kmh'],['RPM','rpm'],['Volt','volt'],['Amp','amp'],['kW','kw'],['SOC %','soc'],['Ctrl C','tc'],['Motor C','tm'],['Trip km','trip']];
-async function live(){try{const j=await (await fetch('/api/live')).json();
-document.getElementById('live').innerHTML=L.map(x=>`<div class="c"><div class="l">${x[0]}</div><div class="v">${j[x[1]]}</div></div>`).join('');
-document.getElementById('st').textContent=(j.linked?'Controller connected':'No controller data')+' · '+j.status+' · fault: '+j.fault+' · '+j.hz+' Hz';}catch(e){}}
-async function files(){const j=await (await fetch('/api/files')).json();
-document.getElementById('files').innerHTML=j.map(f=>`<tr><td><a href="/dl?f=${encodeURIComponent(f.n)}">${f.n}</a></td><td>${(f.s/1024).toFixed(1)} KB</td><td><button onclick="del('${f.n}')">delete</button></td></tr>`).join('');}
-async function del(n){if(confirm('Delete '+n+'?')){await fetch('/del?f='+encodeURIComponent(n));files();}}
-live();files();setInterval(live,700);
-</script></body></html>)HTML";
+#include "web_page.h"  // gzip of assets/web/index.html (tools/embed_web.py)
 
 static void listDir(fs::FS &F, const char *dir, String &out) {
   File d = F.open(dir);
@@ -53,11 +29,24 @@ static void listDir(fs::FS &F, const char *dir, String &out) {
   }
 }
 
-void begin(LiveJsonFn live, TimeFn time) {
-  liveJson = live;
+static void sendPage() {
+  srv.sendHeader("Content-Encoding", "gzip");
+  srv.sendHeader("Cache-Control", "no-cache");
+  srv.send_P(200, "text/html", (const char *)WEB_PAGE_GZ, sizeof WEB_PAGE_GZ);
+}
+static void apiRoute() {
+  int code = 200;
+  String out = apiFn(srv.uri(), [](const char *k) { return srv.arg(k); }, code);
+  srv.send(code, "application/json", out);
+}
+void begin(ApiFn api, TimeFn time) {
+  apiFn = api;
   setTime = time;
-  srv.on("/", [] { srv.send_P(200, "text/html", PAGE); });
-  srv.on("/api/live", [] { srv.send(200, "application/json", liveJson()); });
+  srv.on("/", sendPage);
+  srv.onNotFound([] {
+    if (srv.uri().startsWith("/api/")) apiRoute();
+    else sendPage();
+  });
   srv.on("/api/time", [] {
     if (setTime) setTime(strtoull(srv.arg("t").c_str(), nullptr, 10), srv.arg("tz").toInt());
     srv.send(200, "text/plain", "ok");

@@ -17,6 +17,8 @@ void requestRead();
 // motor turns or the parameters were never read in this session.
 void requestWrite(const uint8_t *img);
 void requestClearFaults();
+// Configure a u-blox GPS (115200 baud, hz updates, NAV-PVT) via the shared TX pin.
+void requestGpsConfig(int hz);
 bool busy();
 uint32_t baud();
 float hz();

@@ -1,7 +1,9 @@
-// Optional GPS module (any NMEA receiver, e.g. u-blox M8/M10 at 10-25 Hz).
-// Plug its TX into the GPS RX pin (see config.h); the firmware detects it by
-// the "$G..RMC" sentences and offers it as a speed source for the dashboard
-// and the drag timer. Pure C++ (unit-tested: test/ride_test.cpp).
+// Optional GPS module. Best: u-blox M8 / M10 - the firmware configures it at
+// every start (115200 baud, 10 or 25 Hz, automotive model, UBX NAV-PVT) and
+// then uses NAV-PVT: speed in mm/s with its accuracy, and the GPS time of each
+// fix (iTOW) so drag splits are timed from the satellites' clock, not from when
+// the bytes arrived. Any other NMEA receiver still works through RMC/GGA.
+// Pure C++ (unit-tested: test/ride_test.cpp).
 #pragma once
 #include <stdint.h>
 #include <stdlib.h>
@@ -65,5 +67,117 @@ private:
     return false;
   }
 };
+
+// ------------------------------------------------------------------ UBX ----
+struct Pvt {
+  uint32_t iTOW = 0;      // GPS time of week, ms
+  bool fixOk = false;     // gnssFixOK and 3D fix
+  uint8_t numSV = 0;
+  float kmh = 0, sAccKmh = 99, hAccM = 99;
+  bool timeValid = false;
+  uint16_t year = 0;
+  uint8_t mon = 0, day = 0, hour = 0, min = 0, sec = 0;
+};
+
+class Ubx {
+public:
+  Pvt pvt;
+  uint32_t frames = 0;
+  // Returns true when a NAV-PVT message was completed.
+  bool push(uint8_t b) {
+    switch (st) {
+    case 0: st = b == 0xB5 ? 1 : 0; return false;
+    case 1: st = b == 0x62 ? 2 : (b == 0xB5 ? 1 : 0); return false;
+    case 2: cls = b; ca = cb = 0; sum(b); st = 3; return false;
+    case 3: id = b; sum(b); st = 4; return false;
+    case 4: len = b; sum(b); st = 5; return false;
+    case 5: len |= b << 8; sum(b); n = 0; st = len > sizeof(buf) ? 0 : (len ? 6 : 7); return false;
+    case 6: buf[n++] = b; sum(b); if (n == len) st = 7; return false;
+    case 7: st = b == ca ? 8 : 0; return false;
+    case 8:
+      st = 0;
+      if (b != cb) return false;
+      frames++;
+      if (cls == 0x01 && id == 0x07 && len >= 92) { parsePvt(); return true; }
+      return false;
+    }
+    st = 0;
+    return false;
+  }
+
+private:
+  uint8_t buf[100], cls = 0, id = 0, ca = 0, cb = 0;
+  uint16_t len = 0, n = 0;
+  int st = 0;
+  void sum(uint8_t b) { ca += b; cb += ca; }
+  uint32_t u32(int o) const { return buf[o] | buf[o + 1] << 8 | buf[o + 2] << 16 | (uint32_t)buf[o + 3] << 24; }
+  void parsePvt() {
+    pvt.iTOW = u32(0);
+    pvt.year = buf[4] | buf[5] << 8;
+    pvt.mon = buf[6]; pvt.day = buf[7]; pvt.hour = buf[8]; pvt.min = buf[9]; pvt.sec = buf[10];
+    pvt.timeValid = (buf[11] & 3) == 3;
+    pvt.fixOk = (buf[21] & 1) && buf[20] >= 3 && buf[20] <= 4;
+    pvt.numSV = buf[23];
+    pvt.hAccM = u32(40) / 1000.0f;
+    int32_t g = (int32_t)u32(60);
+    pvt.kmh = g * 0.0036f;
+    pvt.sAccKmh = u32(68) * 0.0036f;
+  }
+};
+
+// UBX message with sync bytes and Fletcher checksum; returns its length.
+inline int ubxMsg(uint8_t *o, uint8_t cls, uint8_t id, const uint8_t *p, int len) {
+  o[0] = 0xB5; o[1] = 0x62; o[2] = cls; o[3] = id; o[4] = len & 0xFF; o[5] = len >> 8;
+  if (len) memcpy(o + 6, p, len);
+  uint8_t a = 0, b = 0;
+  for (int i = 2; i < 6 + len; i++) { a += o[i]; b += a; }
+  o[6 + len] = a; o[7 + len] = b;
+  return len + 8;
+}
+// u-blox M10 style key/value config (RAM layer only, re-sent at every start).
+struct ValSet {
+  uint8_t p[96];
+  int n = 4;
+  ValSet() { p[0] = 0; p[1] = 0x01; p[2] = p[3] = 0; }
+  void add(uint32_t key, uint32_t v) {
+    for (int i = 0; i < 4; i++) p[n++] = (key >> (8 * i)) & 0xFF;
+    int sz = (key >> 28) & 7;
+    int bytes = sz == 4 ? 4 : sz == 3 ? 2 : 1;
+    for (int i = 0; i < bytes; i++) p[n++] = (v >> (8 * i)) & 0xFF;
+  }
+  int build(uint8_t *o) const { return ubxMsg(o, 0x06, 0x8A, p, n); }
+};
+// Step 1 (sent at the module's current baud): switch UART1 to 115200.
+inline int ubxBaudCmd(uint8_t *o) {
+  int k = 0;
+  uint8_t prt[20] = {1, 0, 0, 0, 0xD0, 0x08, 0, 0, 0x00, 0xC2, 0x01, 0x00, 0x03, 0, 0x03, 0, 0, 0, 0, 0};
+  k += ubxMsg(o + k, 0x06, 0x00, prt, 20);  // M8: CFG-PRT
+  ValSet v;
+  v.add(0x40520001, 115200);                // M10: CFG-UART1-BAUDRATE
+  k += v.build(o + k);
+  return k;
+}
+// Step 2 (at 115200): rate, automotive model, NAV-PVT on, chatty NMEA off.
+inline int ubxSetupCmd(uint8_t *o, int hz) {
+  int k = 0;
+  uint16_t ms = hz >= 25 ? 40 : hz >= 20 ? 50 : 100;
+  uint8_t rate[6] = {(uint8_t)(hz >= 25 ? 100 : ms), 0, 1, 0, 1, 0};  // M8 tops out at 10 Hz
+  k += ubxMsg(o + k, 0x06, 0x08, rate, 6);  // CFG-RATE
+  uint8_t nav5[36] = {0x01, 0x00, 4};
+  k += ubxMsg(o + k, 0x06, 0x24, nav5, 36); // CFG-NAV5 dynModel 4 = automotive
+  const uint8_t msgs[5][3] = {{0x01, 0x07, 1}, {0xF0, 0x03, 0}, {0xF0, 0x02, 0}, {0xF0, 0x01, 0}, {0xF0, 0x05, 0}};
+  for (auto &m : msgs) k += ubxMsg(o + k, 0x06, 0x01, m, 3);  // CFG-MSG: PVT on, GSV/GSA/GLL/VTG off
+  ValSet v;
+  v.add(0x30210001, ms);   // CFG-RATE-MEAS
+  v.add(0x30210002, 1);    // CFG-RATE-NAV
+  v.add(0x20110021, 4);    // CFG-NAVSPG-DYNMODEL automotive
+  v.add(0x20910007, 1);    // CFG-MSGOUT-UBX_NAV_PVT_UART1
+  v.add(0x209100c5, 0);    // GSV off
+  v.add(0x209100c0, 0);    // GSA off
+  v.add(0x209100ca, 0);    // GLL off
+  v.add(0x209100b1, 0);    // VTG off
+  k += v.build(o + k);
+  return k;
+}
 
 }  // namespace gps

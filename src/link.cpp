@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include "config.h"
 #include "link.h"
+#include "gps.h"
 
 namespace vlink {
 using namespace votol;
@@ -26,6 +27,27 @@ static uint32_t lastLive = 0, lastAny = 0, hzCount = 0, hzAt = 0;
 static float hzVal = 0;
 static int16_t lastRpm = 0;
 static volatile bool ackPN = false;
+static volatile int gpsCfgHz = 0;  // >0: send the u-blox setup on our TX line
+
+// The GPS module's RX shares our TX wire with the controller's RX. The
+// controller ignores UBX bytes (wrong header / baud) and the GPS ignores the
+// controller frames, so the GPS can be set up through the same pin.
+static void sendGpsConfig(int hz) {
+  static uint8_t buf[640];
+  const uint32_t tryBauds[3] = {9600, 38400, 115200};
+  for (uint32_t b : tryBauds) {
+    U.updateBaudRate(b);
+    int n = gps::ubxBaudCmd(buf);
+    U.write(buf, n); U.flush();
+    delay(60);
+  }
+  U.updateBaudRate(115200);
+  delay(150);
+  int n = gps::ubxSetupCmd(buf, hz);
+  for (int i = 0; i < 2; i++) { U.write(buf, n); U.flush(); delay(80); }
+  U.updateBaudRate(BAUDS[baudIx]);
+  while (U.available()) U.read();
+}
 
 static void sendFrame(const uint8_t *f) { U.write(f, FRAME_LEN); U.flush(); }
 
@@ -98,6 +120,7 @@ static void task(void *) {
   U.begin(BAUDS[baudIx], SERIAL_8N1, VOTOL_RX_PIN, VOTOL_TX_PIN);
   uint32_t silentSince = millis();
   for (;;) {
+    if (gpsCfgHz) { int hz = gpsCfgHz; gpsCfgHz = 0; sendGpsConfig(hz); }
     if (wantRead) {
       wantRead = false;
       isBusy = true;
@@ -144,6 +167,7 @@ void begin(LiveFn live, ParamsFn params, WriteFn write) {
 }
 void requestRead() { wantRead = true; }
 void requestWrite(const uint8_t *im) { memcpy(writeImg, im, PARAM_BYTES); wantWrite = true; }
+void requestGpsConfig(int hz) { gpsCfgHz = hz; }
 void requestClearFaults() { if (lastRpm == 0) wantClear = true; }
 bool busy() { return isBusy || wantRead || wantWrite; }
 uint32_t baud() { return BAUDS[baudIx]; }

@@ -19,7 +19,9 @@
 namespace logger {
 static fs::FS *F = &LittleFS;
 static bool onSd = false, ok = false;
+#if HAS_SD
 static SPIClass sdSpi(VSPI);
+#endif
 static SemaphoreHandle_t mux = nullptr;
 static String bufDetail, bufSec, bufFault;
 static char pathDetail[32], pathSec[32];
@@ -27,10 +29,13 @@ static uint16_t trip = 0;
 
 bool begin() {
   if (!mux) mux = xSemaphoreCreateMutex();
+#if HAS_SD
   sdSpi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   if (SD.begin(SD_CS, sdSpi, 20000000) && SD.cardType() != CARD_NONE) {
     F = &SD; onSd = true;
-  } else {
+  } else
+#endif
+  {
     LittleFS.begin(true);
     F = &LittleFS; onSd = false;
   }

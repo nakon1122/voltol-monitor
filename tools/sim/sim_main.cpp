@@ -30,7 +30,7 @@ static void live(float kmh) {
   s.linked = true; s.hz = 10.2f; s.baud = 9600; s.frames = 18342; s.errors = 3;
   s.live.volt = 78.4f; s.live.amp = 48.6f; s.live.rpm = (int)lroundf(kmh / ride::rpmToKmh(1, cfg.circMm(), 1));
   s.live.tCtrl = 42; s.live.tMotor = 55; s.live.gearBits = 2; s.live.status = votol::ST_RUN; s.live.faults = 0;
-  s.kmh = kmh; s.kw = s.live.volt * s.live.amp / 1000; s.soc = 85;
+  s.kmh = kmh; s.kw = s.live.volt * s.live.amp / 1000; s.soc = 85; s.speedOk = true; s.src = 0; s.dragWaitGps = false;
   s.trip = ride::Trip(); s.trip.distM = 12400; s.trip.maxKmh = 98; s.trip.maxA = 186; s.trip.wh = 508; s.trip.movingS = 1210;
   s.odoKm = 1284;
 }
@@ -63,7 +63,7 @@ int main() {
   live(0); s.live.amp = 0; s.kw = 0; s.live.status = votol::ST_FAULT; s.live.faults = 0x00000082;
   cfg.dash = 1; shot("06_dash_B_fault");
   cfg.dash = 2; live(105); s.live.amp = 172; s.kw = 172 * 77.1f / 1000; s.live.volt = 77.1f; s.live.gearBits = 3; shot("07_dash_C_sport");
-  s.linked = false; cfg.dash = 0; shot("08_dash_A_nolink");
+  s.linked = false; s.speedOk = false; cfg.dash = 0; shot("08_dash_A_nolink");
   live(62); cfg.dash = 0; ui::menuOpen = true; shot("09_menu"); ui::menuOpen = false;
   // ---- drag
   ride::DragTimer bestT; s.best = runResult(3.15, 140, 25, &bestT); s.haveBest = true; strcpy(s.bestWhen, "03 Nov 18:12");
@@ -73,6 +73,21 @@ int main() {
   ride::DragTimer run; runResult(3.3, 140, 7.95, &run); drag = run; live(83.6); s.live.amp = 186; s.kw = 14.2f;
   shot("12_drag_run");
   runResult(3.3, 140, 25, &run); drag = run; shot("13_drag_result");
+  // ---- GPS only (no controller wired)
+  auto gpsOnly = [&](float kmh) {
+    live(kmh); s.linked = false; s.speedOk = true; s.src = 1; s.gpsSeen = true; s.gpsFix = true; s.gpsUbx = true;
+    s.gpsSats = 14; s.gpsHz = 25; s.gpsSAcc = 0.3f; s.kmh = kmh;
+  };
+  gpsOnly(57); ui::page = PG_DASH; cfg.dash = 1; shot("13b_dash_B_gps_only");
+  cfg.rollout = 1; ui::page = PG_DRAG;
+  gpsOnly(0); s.gpsSats = 4; s.gpsSAcc = 2.4f; s.dragWaitGps = true;
+  drag = ride::DragTimer(); drag.cfg = ride::DragCfg::gps(true); drag.arm(); shot("13c_drag_gps_waiting");
+  gpsOnly(0.4f); s.dragWaitGps = false;
+  for (double t = 0; t < 1.2; t += 0.04) drag.feed(t, 0.4); shot("13d_drag_gps_ready");
+  { ride::DragTimer gr; gr.cfg = ride::DragCfg::gps(true); gr.arm();
+    for (double t = 0; t < 30; t += 0.04) { double tau = t - 1.5, v = tau <= 0 ? 0.08 : fmin(3.3 * tau, 140 / 3.6); gr.feed(t, v * 3.6); }
+    drag = gr; gpsOnly(0); shot("13e_drag_gps_result"); }
+  cfg.rollout = 0; cfg.dash = 0;
   ui::page = PG_DRAG_HIST;
   const char *dates[5] = {"03 Nov 18:31", "03 Nov 18:12", "03 Nov 17:58", "02 Nov 19:20", "02 Nov 19:05"};
   for (int i = 0; i < 5; i++) {
