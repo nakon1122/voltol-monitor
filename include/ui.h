@@ -20,6 +20,7 @@ struct Settings {
   int8_t tzHours = 7;       // local time = UTC + this (GPS time)
   uint8_t rollout = 0;      // drag: 1 = clock starts after the first foot (drag-strip style)
   uint8_t gpsRate = 0;      // 0 = 10 Hz, 1 = 25 Hz (u-blox M10)
+  uint8_t maxG10 = 16;      // max traction for the drag timer, 0.1 g (wheel-spin limit)
   uint8_t wifi = 1;
   float circMm() const {
     return ride::tyreCircMm(tyreW, tyreA, tyreR) * (1000 + wheelCorr) / 1000.0f;
@@ -31,6 +32,13 @@ struct TripRow { uint16_t id; char when[16]; float km, maxKmh, avgKmh, maxA, wh,
 struct FaultRow { char when[16]; bool set; uint32_t code; float kmh, amp, volt; int rpm; };
 struct DragRow { char when[16]; float t[4], trap[4]; float peakA; };
 struct BackupRow { char when[16]; uint32_t sum; uint8_t id; };
+
+// Launch / street profiles: 3 throttle settings that cut wheel spin.
+static const char *const PROF_FIELDS[3] = {"Rate of rise", "Start torque", "Soft-start grade"};
+struct LaunchProf {
+  uint8_t have[2] = {0, 0};  // 0 street, 1 launch
+  int32_t v[2][3] = {{0, 0, 0}, {0, 0, 0}};
+};
 
 struct UiState {
   // controller link
@@ -47,6 +55,8 @@ struct UiState {
   int gpsSats = 0;
   float gpsHz = 0, gpsKmh = 0, gpsSAcc = 99;  // speed accuracy, km/h
   bool dragWaitGps = false;  // armed for GPS but signal not good enough yet
+  bool slipOk = false;       // controller + GPS both live: wheel slip known
+  float slipPct = 0;
   ride::Trip trip;
   double odoKm = 0;
   char clock[8] = "";      // "18:42" when time is known
@@ -76,6 +86,15 @@ struct UiState {
   uint8_t msgKind = 0;       // 0 info, 1 ok, 2 error
   BackupRow backups[10];
   int backupN = 0;
+  LaunchProf prof;
+  // firmware update
+  bool netOn = false;          // internet Wi-Fi configured
+  bool netConnected = false;
+  char netSsid[33] = "", netIp[16] = "";
+  bool updAvailable = false, rolledBack = false;
+  char updLatest[16] = "", updMsg[64] = "";
+  uint8_t updState = 0;        // ota::State
+  int updProgress = 0;
   // info
   const char *fw = "";
   char ssid[24] = "", ip[24] = "";
@@ -87,11 +106,12 @@ struct UiActions {
   int restoreBackup = -1;     // backup id to load into edit[]
   bool armDrag = false, cancelDrag = false, settingsChanged = false;
   bool touchCal = false, newTrip = false;
+  bool checkUpdate = false, installUpdate = false, profChanged = false;
 };
 
 enum Page : uint8_t {
   PG_BOOT, PG_DASH, PG_DRAG, PG_DRAG_HIST, PG_LOG, PG_GRAPH, PG_FAULTS,
-  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_COUNT
+  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_COUNT
 };
 
 namespace ui {

@@ -88,6 +88,14 @@ int main() {
     for (double t = 0; t < 30; t += 0.04) { double tau = t - 1.5, v = tau <= 0 ? 0.08 : fmin(3.3 * tau, 140 / 3.6); gr.feed(t, v * 3.6); }
     drag = gr; gpsOnly(0); shot("13e_drag_gps_result"); }
   cfg.rollout = 0; cfg.dash = 0;
+  // ---- hybrid (controller + GPS) run with wheel slip, then an RPM-only spin-corrected result
+  { ride::DragTimer h; h.cfg = ride::DragCfg::gps(false); h.arm();
+    for (double t = 0; t < 4.6; t += 0.04) { double tau = t - 1.5, v = tau <= 0 ? 0.1 : 1.35 * 9.81 * tau; h.feed(t, v * 3.6, tau > 0 ? 420 : 0, 80); if (fabs(t - 1.52) < 0.02) h.launchHint(1.5); h.slip(tau > 0.3 && tau < 0.9 ? 14 : 3); s.now = t; }
+    drag = h; live(146); s.live.amp = 418; s.kw = 31.5f; s.src = 1; s.gpsSeen = s.gpsFix = s.gpsUbx = true; s.gpsSats = 15; s.gpsHz = 25; s.gpsSAcc = 0.2f;
+    s.slipOk = true; s.slipPct = 6; shot("13f_drag_hybrid_run"); s.slipOk = false; }
+  { ride::DragTimer r; r.cfg = ride::DragCfg::rpm(false, 1.6); r.arm();
+    for (double t = 0; t < 12; t += 0.1) { double tau = t - 0.5, real = tau <= 0 ? 0 : fmin(1.3 * 9.81 * tau, 70); double w = real + (tau > 0.2 && tau < 1.0 ? 25 * sin((tau - 0.2) / 0.8 * M_PI) : 0); r.feed(t, w * 3.6, tau > 0 ? 520 : 0, 82); if (r.state == ride::DragTimer::DONE) break; }
+    drag = r; live(0); s.live.amp = 0; s.src = 0; s.gpsSeen = false; shot("13g_drag_spin_corrected"); }
   ui::page = PG_DRAG_HIST;
   const char *dates[5] = {"03 Nov 18:31", "03 Nov 18:12", "03 Nov 17:58", "02 Nov 19:20", "02 Nov 19:05"};
   for (int i = 0; i < 5; i++) {
@@ -160,10 +168,17 @@ int main() {
   strcpy(s.msg, "Written and verified OK"); s.msgKind = 1;
   ui::page = PG_TUNE; memcpy(s.params.b, s.edit, PARAM_BYTES); shot("22_tune_written"); s.msg[0] = 0;
   ui::page = PG_BACKUPS; shot("23_backups");
+  s.prof.have[0] = s.prof.have[1] = 1;
+  s.prof.v[0][0] = 40; s.prof.v[0][1] = 300; s.prof.v[0][2] = 16;
+  s.prof.v[1][0] = 18; s.prof.v[1][1] = 150; s.prof.v[1][2] = 10;
+  ui::page = PG_LAUNCH; shot("23b_launch_profile");
   // ---- setup
-  ui::page = PG_SETUP; shot("24_setup");
   ui::page = PG_WHEEL; shot("25_wheel");
   live(0); s.gpsSeen = true; s.gpsFix = true; s.gpsSats = 11; s.gpsHz = 10;
-  ui::page = PG_INFO; shot("26_info");
+  s.netOn = true; s.netConnected = true; strcpy(s.netSsid, "Home-WiFi"); strcpy(s.netIp, "192.168.1.57");
+  s.updAvailable = true; strcpy(s.updLatest, "1.3.0"); strcpy(s.updMsg, "Version 1.3.0 available");
+  ui::page = PG_SETUP; shot("24_setup");
+  ui::page = PG_INFO; shot("26_info_update");
+  s.updState = 2; s.updProgress = 62; shot("27_info_downloading");
   return 0;
 }

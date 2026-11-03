@@ -11,7 +11,7 @@ const live = (o = {}) => Object.assign({
   gps: { seen: true, fix: true, ubx: true, sats: 14, hz: 25, acc: 0.3 },
   trip: { km: 12.4, max: 98, avg: 37, maxA: 186, wh: 508, whkm: 41 }, odo: 1284, fw: 'VOLTOL Monitor 1.1.0', sd: false,
   freeKB: 512, maxKmh: 120, maxAmp: 200, dash: 0,
-  drag: { state: 'IDLE', el: 0, dist: 0, spd: 0, gps: false, wait: false, roll: false, sp: [sp(0), sp(0), sp(0), sp(0)].map(x => ({ ...x, v: 0, a: 0 })), peakA: 0, peakKw: 0, spin: false, haveBest: true, best, bestWhen: '03 Nov 18:12' },
+  drag: { state: 'IDLE', el: 0, dist: 0, spd: 0, gps: false, wait: false, roll: false, sp: [sp(0), sp(0), sp(0), sp(0)].map(x => ({ ...x, v: 0, a: 0 })), peakA: 0, peakKw: 0, spin: false, spinCorr: false, maxSlip: 0, slipOk: false, slip: 0, hybrid: false, haveBest: true, best, bestWhen: '03 Nov 18:12' },
 }, o);
 const graph = { kmh: [], amp: [] };
 for (let i = 0; i < 180; i++) { const t = i / 180; let k = 60 + 35 * Math.sin(t * 9) * (t < .5 ? t * 2 : 1) + (i > 150 ? -50 * (i - 150) / 30 : 0); graph.kmh.push(Math.max(0, k)); graph.amp.push(i > 150 ? -25 : 60 + 110 * Math.cos(t * 9 - .6) + (i % 7) * 4); }
@@ -37,6 +37,8 @@ async function shot(page, name, liveObj, setup) {
     if (u.pathname === '/api/lists') return json(lists);
     if (u.pathname === '/api/params') return json(params);
     if (u.pathname === '/api/settings') return json(settings);
+    if (u.pathname === '/api/ota') return json({ version: '1.2.0', netOn: true, ssid: 'Home-WiFi', connected: true, ip: '192.168.1.57', available: true, latest: '1.3.0', state: 0, progress: 0, msg: 'Version 1.3.0 available', rolledBack: false });
+    if (u.pathname === '/api/profile') return json({ p: [{ have: true, v: [40, 300, 16] }, { have: true, v: [18, 150, 10] }], names: ['Rate of rise', 'Start torque', 'Soft-start grade'], now: [40, 300, 16], have: true });
     if (u.pathname === '/api/files') return json([{ n: '/log/T0042_detail.csv', s: 212300 }, { n: '/log/T0042_sec.csv', s: 31800 }, { n: '/faults.csv', s: 4200 }, { n: '/trips.csv', s: 900 }, { n: '/drag.csv', s: 320 }]);
     return json({});
   });
@@ -56,10 +58,12 @@ async function shot(page, name, liveObj, setup) {
   await shot(page, 'web_01_dash_A', live(), style(0));
   await shot(page, 'web_02_dash_B', live({ kmh: 87, rpm: 752, amp: 132, kw: 10.1 }), style(1));
   await shot(page, 'web_03_dash_C', live({ kmh: 105, rpm: 908, amp: 172, kw: 13.3, gear: 'S' }), style(2));
-  const run = live({ kmh: 83.6, amp: 186, drag: { ...live().drag, state: 'RUN', el: 7.42, dist: 142.6, spd: 83.6, peakA: 0, sp: [sp(3.33, 39.6, 205), sp(7.78, 92.5, 214), { done: false, t: 0, v: 0, a: 0 }, { done: false, t: 0, v: 0, a: 0 }] } });
+  const run = live({ kmh: 146, amp: 418, drag: { ...live().drag, state: 'RUN', el: 3.06, dist: 62.0, spd: 145.9, peakA: 0, hybrid: true, slipOk: true, slip: 6, gps: true, sp: [sp(1.66, 79.2, 420), { done: false, t: 0, v: 0, a: 0 }, { done: false, t: 0, v: 0, a: 0 }, { done: false, t: 0, v: 0, a: 0 }] } });
   await shot(page, 'web_04_drag_run', run, async p => { await style(0)(p); await tab('drag')(p); });
   const gpsDone = live({ linked: false, kmh: 0, src: 1, drag: { ...live().drag, state: 'DONE', el: 15.81, dist: 402.3, gps: true, roll: true, sp: [sp(2.90, 39.6, 0), sp(7.36, 92.5, 0), sp(10.61, 131.2, 0), sp(15.81, 140.0, 0)] } });
   await shot(page, 'web_05_drag_gps_result', gpsDone, tab('drag'));
+  const spinDone = live({ kmh: 0, amp: 0, drag: { ...live().drag, state: 'DONE', el: 8.48, dist: 402.3, spin: true, spinCorr: true, peakA: 520, sp: [sp(1.65, 76.0, 520), sp(3.94, 181.1, 520), sp(5.61, 252.0, 510), sp(8.48, 252.0, 480)] } });
+  await shot(page, 'web_05b_drag_spin_corrected', spinDone, tab('drag'));
   await shot(page, 'web_06_log', live({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), tab('log'));
   await shot(page, 'web_07_tune', live({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), tab('tune'));
   await shot(page, 'web_08_tune_confirm', live({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), async p => { await tab('tune')(p); await p.click('#pWrite'); });

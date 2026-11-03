@@ -50,6 +50,14 @@ jobs:
           cp "$BOOT_APP0" out/BOOT_APP0.bin
           grep -E "RAM:|Flash:" out/build.log > out/SIZES.txt || true
           (cd out && sha256sum *.bin > SHA256SUMS.txt)
+          # version.json: read by the boards for internet updates
+          VER=$(grep -oP '#define VOLTOL_FW "\K[^"]+' include/config.h)
+          NOTE=$(git log -1 --pretty=%s | tr -d '"\\' | cut -c1-120)
+          sz() { stat -c %s "out/$1"; }
+          sh() { sha256sum "out/$1" | cut -d' ' -f1; }
+          printf '{"version":"%s","notes":"%s","cyd35":{"file":"VOLTOL_CYD35_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s3":{"file":"VOLTOL_S3_APP_UPDATE.bin","size":%s,"sha256":"%s"}}\n' \
+            "$VER" "$NOTE" "$(sz VOLTOL_CYD35_APP_UPDATE.bin)" "$(sh VOLTOL_CYD35_APP_UPDATE.bin)" "$(sz VOLTOL_S3_APP_UPDATE.bin)" "$(sh VOLTOL_S3_APP_UPDATE.bin)" > out/version.json
+          cat out/version.json
       - name: Publish to firmware-build branch
         if: always()
         run: |

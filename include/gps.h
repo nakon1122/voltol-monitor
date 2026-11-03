@@ -1,6 +1,6 @@
 // Optional GPS module. Best: u-blox M8 / M10 - the firmware configures it at
-// every start (115200 baud, 10 or 25 Hz, automotive model, UBX NAV-PVT) and
-// then uses NAV-PVT: speed in mm/s with its accuracy, and the GPS time of each
+// every start // (115200 baud, 10 or 25 Hz, airborne <2g model so hard launches are not
+// smoothed, UBX NAV-PVT) and then uses NAV-PVT: speed in mm/s with its accuracy, and the GPS time of each
 // fix (iTOW) so drag splits are timed from the satellites' clock, not from when
 // the bytes arrived. Any other NMEA receiver still works through RMC/GGA.
 // Pure C++ (unit-tested: test/ride_test.cpp).
@@ -163,14 +163,15 @@ inline int ubxSetupCmd(uint8_t *o, int hz) {
   uint16_t ms = hz >= 25 ? 40 : hz >= 20 ? 50 : 100;
   uint8_t rate[6] = {(uint8_t)(hz >= 25 ? 100 : ms), 0, 1, 0, 1, 0};  // M8 tops out at 10 Hz
   k += ubxMsg(o + k, 0x06, 0x08, rate, 6);  // CFG-RATE
-  uint8_t nav5[36] = {0x01, 0x00, 4};
-  k += ubxMsg(o + k, 0x06, 0x24, nav5, 36); // CFG-NAV5 dynModel 4 = automotive
+  // Airborne <2g: does not smooth away the > 1 g acceleration of a drag launch
+  uint8_t nav5[36] = {0x01, 0x00, 7};
+  k += ubxMsg(o + k, 0x06, 0x24, nav5, 36); // CFG-NAV5 dynModel 7
   const uint8_t msgs[5][3] = {{0x01, 0x07, 1}, {0xF0, 0x03, 0}, {0xF0, 0x02, 0}, {0xF0, 0x01, 0}, {0xF0, 0x05, 0}};
   for (auto &m : msgs) k += ubxMsg(o + k, 0x06, 0x01, m, 3);  // CFG-MSG: PVT on, GSV/GSA/GLL/VTG off
   ValSet v;
   v.add(0x30210001, ms);   // CFG-RATE-MEAS
   v.add(0x30210002, 1);    // CFG-RATE-NAV
-  v.add(0x20110021, 4);    // CFG-NAVSPG-DYNMODEL automotive
+  v.add(0x20110021, 7);    // CFG-NAVSPG-DYNMODEL airborne <2g
   v.add(0x20910007, 1);    // CFG-MSGOUT-UBX_NAV_PVT_UART1
   v.add(0x209100c5, 0);    // GSV off
   v.add(0x209100c0, 0);    // GSA off

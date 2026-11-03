@@ -117,6 +117,46 @@ int main() {
     uint8_t big[600];
     CHECK(gps::ubxBaudCmd(big) > 0 && gps::ubxSetupCmd(big, 25) < 600);
   }
+  // ---- 8 s class bike: 1.5 g launch must NOT be flagged with max traction 1.6 g
+  {
+    DragTimer d; d.cfg = DragCfg::rpm(false, 1.6); d.arm();
+    for (double t = 0; t < 20; t += 0.1) { double tau = t - 0.5, v = tau <= 0 ? 0 : fmin(1.5 * 9.81 * tau, 70); d.feed(t, v * 3.6); if (d.state == DragTimer::DONE) break; }
+    CHECK(d.state == DragTimer::DONE && !d.r.wheelspin && !d.r.spinCorrected);
+  }
+  // ---- wheel spin, RPM only: wheel speed overshoots for 0.8 s; clamping keeps the error small
+  {
+    double errRaw = 0, errClamp = 0;
+    for (int clamp = 0; clamp < 2; clamp++) {
+      DragTimer d; d.cfg = DragCfg::rpm(false, 1.6); d.cfg.clampG = clamp; d.arm();
+      double a = 1.3 * 9.81;
+      for (double t = 0; t < 20; t += 0.1) {
+        double tau = t - 0.5, real = tau <= 0 ? 0 : fmin(a * tau, 70);
+        double wheel = real + (tau > 0.2 && tau < 1.0 ? 25 * sin((tau - 0.2) / 0.8 * M_PI) : 0);  // +90 km/h spike
+        d.feed(t, wheel * 3.6);
+        if (d.state == DragTimer::DONE) break;
+      }
+      CHECK(d.r.wheelspin);
+      double tAcc = 70 / a, dAcc = 0.5 * a * tAcc * tAcc, want = tAcc + (402.336 - dAcc) / 70;
+      (clamp ? errClamp : errRaw) = fabs(d.r.s[3].t - want);
+      if (clamp) CHECK(d.r.spinCorrected);
+    }
+    printf("wheel spin 402 m error: raw %.3f s, max-traction limited %.3f s\n", errRaw, errClamp);
+    CHECK(errClamp < errRaw);
+  }
+  // ---- hybrid: GPS distance, launch from RPM hint
+  {
+    DragTimer d; d.cfg = DragCfg::gps(false); d.arm();
+    double a = 1.3 * 9.81, launch = 2.013;
+    for (double t = 0; t < 20; t += 0.04) {
+      double tau = t - launch, v = tau <= 0 ? 0.2 : fmin(a * tau, 70);
+      if (fabs(t - 2.04) < 0.001) d.launchHint(launch + 0.004);  // RPM saw the wheel move
+      d.feed(t, v * 3.6);
+      if (d.state == DragTimer::DONE) break;
+    }
+    double tAcc = 70 / a, dAcc = 0.5 * a * tAcc * tAcc, want = tAcc + (402.336 - dAcc) / 70;
+    printf("hybrid 402 m: %.3f s (true %.3f)\n", d.r.s[3].t, want);
+    CHECK(fabs(d.r.s[3].t - want) < 0.02);
+  }
   printf(fails ? "ride_test: %d FAILED\n" : "ride_test: all passed\n", fails);
   return fails ? 1 : 0;
 }

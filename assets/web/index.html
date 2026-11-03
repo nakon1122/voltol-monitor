@@ -75,12 +75,20 @@ svg text{font-family:inherit}
 <section id="t-tune" hidden>
   <div class="card"><div class="row"><div><b id="pHead">Parameters not read yet</b><div class="mut" id="pSub" style="font-size:13px;margin-top:4px"></div></div><span class="sp"></span><span id="pMsg" style="font-weight:700;font-size:13px"></span></div>
     <div class="row" style="margin-top:10px"><button class="btn" id="pRead">READ</button><div class="seg" id="stepSeg" style="width:160px"><button data-k="1" class="on">x1</button><button data-k="10">x10</button><button data-k="100">x100</button></div><span class="sp"></span><button class="btn" id="pUndo">UNDO ALL</button><button class="btn y" id="pWrite" disabled>WRITE</button></div></div>
+  <h3>Launch profile (against wheel spin)</h3><div class="card c2"><div class="mut" style="font-size:12px;margin-bottom:6px">Lower throttle rise / start torque = less wheel spin. Apply loads the values into the editor; then press WRITE.</div>
+    <table><thead><tr><th>Setting</th><th>Now</th><th>Street</th><th></th><th class="ye">Launch</th><th></th></tr></thead><tbody id="prof"></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="btn" onclick="profCap(0)">SAVE NOW AS STREET</button><button class="btn" onclick="profCap(1)">SAVE NOW AS LAUNCH</button><span class="sp"></span><button class="btn" onclick="profApply(0)">APPLY STREET</button><button class="btn y" onclick="profApply(1)">APPLY LAUNCH</button></div></div>
   <div id="pGroups"></div>
   <h3>Backups (saved automatically on every new read)</h3><div class="card c2"><table><tbody id="backups"></tbody></table></div>
 </section>
 <!-- SETUP -->
 <section id="t-setup" hidden>
   <div class="card c2" id="setList"></div>
+  <h3>Internet Wi-Fi (for updates)</h3><div class="card c2"><div class="row"><input id="wSsid" placeholder="Wi-Fi name" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px">
+    <input id="wPass" type="password" placeholder="Password" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px"><button class="btn" onclick="saveWifi()">SAVE</button></div>
+    <div class="mut" id="wStat" style="font-size:13px;margin-top:8px"></div></div>
+  <h3>Firmware</h3><div class="card c2"><div class="row"><div><b id="uVer"></b><div class="mut" id="uMsg" style="font-size:13px;margin-top:4px"></div></div><span class="sp"></span><button class="btn" onclick="otaDo('check')">CHECK</button><button class="btn y" id="uInst" onclick="otaDo('install')" disabled>INSTALL</button></div>
+    <div class="bar" id="uBarW" style="display:none"><i id="uBar" style="background:#FFC400"></i></div></div>
   <h3>Device</h3><div class="card c2 sub" id="devInfo" style="font-size:14px;line-height:1.7"></div>
   <h3>Firmware update</h3><div class="card c2"><form method="POST" action="/update" enctype="multipart/form-data" class="row"><input type="file" name="fw" accept=".bin" style="flex:1;color:var(--sub)"><button class="btn y">UPLOAD</button></form>
   <div class="mut" style="font-size:12px;margin-top:6px">Use the *_APP_UPDATE.bin file. Settings, logs and backups are kept.</div></div>
@@ -133,8 +141,9 @@ function renderDrag(){const d=L.drag;const st=$('dState');st.textContent=d.state
   $('dTime').textContent=f2(d.el);$('dSpd').textContent=f1(d.state=='RUN'?d.spd:(L.speedOk?L.kmh:0));
   $('dSrc').textContent=(d.gps?`GPS ${L.gps.hz.toFixed(0)} Hz · ${L.gps.sats} sats · ±${L.gps.acc.toFixed(1)} km/h`:`RPM ${L.hz.toFixed(0)} Hz`)+(d.roll?' · rollout 1 ft':'');
   const hint={IDLE:'Press ARM, then launch from a standstill',ARMED:d.wait?`Waiting for GPS: ${L.gps.sats} sats, ±${L.gps.acc.toFixed(1)} km/h (need 6+, ±1.0)`:(d.gps?'GPS: hold still for 1 s':'Bring the bike to a full stop (0 RPM)'),
-    READY:d.gps?'READY · starts above 3 km/h':'READY · timer starts when the wheel turns',RUN:`Distance ${f1(d.dist)} m`,DONE:d.sp[3].done?`402 m @ ${f1(d.sp[3].v)} km/h`+(d.peakA?` · peak ${d.peakA.toFixed(0)} A`:''):'',ABORTED:'Run stopped before 402 m'}[d.state];
-  $('dHint').textContent=hint+(d.spin?' · wheel spin suspected':'');$('dHint').className=d.wait?'ye':'sub';
+    READY:d.hybrid?'HYBRID: launch from RPM, distance from GPS':d.gps?'READY · starts above 3 km/h':'READY · timer starts when the wheel turns',RUN:`Distance ${f1(d.dist)} m`+(d.slipOk?` · slip ${d.slip.toFixed(0)}%`:''),DONE:d.sp[3].done?`402 m @ ${f1(d.sp[3].v)} km/h`+(d.peakA?` · peak ${d.peakA.toFixed(0)} A`:''):'',ABORTED:'Run stopped before 402 m'}[d.state];
+  const tail=d.state=='DONE'?(d.spinCorr?' · SPIN-CORRECTED (not counted as best)':d.maxSlip>5?` · max wheel slip ${d.maxSlip.toFixed(0)}%`:d.spin?' · wheel spin detected':''):'';
+  $('dHint').textContent=hint+tail;$('dHint').className=d.wait?'ye':(d.spinCorr&&d.state=='DONE'?'re':'sub');
   const M=[18.288,100,201.168,402.336],N=['60 ft','100 m','201 m','402 m'];let s=`<rect x="0" y="8" width="460" height="8" rx="4" fill="#18212B"/><rect x="0" y="8" width="${Math.max(0,Math.min(460,460*d.dist/402.336))}" height="8" rx="4" fill="#00E08A"/>`;
   M.forEach((m,i)=>{const x=Math.min(458,460*m/402.336);s+=`<rect x="${x-1}" y="4" width="2" height="16" fill="#9AA7B3"/><text x="${Math.min(445,Math.max(12,x))}" y="32" fill="#6E7C89" font-size="10" text-anchor="middle">${N[i]}</text>`});$('dTrack').innerHTML=s;
   const peak=d.peakA>0;$('pkH').style.display=peak?'':'none';
@@ -162,7 +171,11 @@ async function delFile(n){if(confirm('Delete '+n+'?')){await fetch('/del?f='+enc
 // ---------- tune
 document.querySelectorAll('#stepSeg button').forEach(b=>b.onclick=()=>{stepK=+b.dataset.k;document.querySelectorAll('#stepSeg button').forEach(x=>x.classList.toggle('on',x==b))});
 $('pRead').onclick=()=>api('/api/params/read').then(renderParams).then(pollParams);$('pUndo').onclick=()=>api('/api/params/undo').then(renderParams);
-async function params(){renderParams(await api('/api/params'));lists()}
+async function params(){renderParams(await api('/api/params'));lists();renderProf(await api('/api/profile'))}
+let PR=null;function renderProf(p){PR=p;$('prof').innerHTML=p.names.map((n,f)=>`<tr><td>${n}</td><td class="mut">${p.have?p.now[f]:'-'}</td>${[0,1].map(q=>`<td class="${q?'ye':''}"><b>${p.p[q].have?p.p[q].v[f]:'-'}</b></td><td><span class="step"><button onclick="profSet(${q},${f},-1)">−</button><button onclick="profSet(${q},${f},1)">+</button></span></td>`).join('')}</tr>`).join('')}
+function profSet(q,f,d){const cur=PR.p[q].have?PR.p[q].v[f]:PR.now[f];api('/api/profile/set',{p:q,f,raw:cur+d*stepK}).then(renderProf)}
+function profCap(q){api('/api/profile/capture',{p:q}).then(renderProf)}
+function profApply(q){if(!PR.p[q].have)return;api('/api/profile/apply',{p:q}).then(renderParams)}
 function pollParams(){if(P&&P.busy)setTimeout(()=>api('/api/params').then(renderParams).then(pollParams),700);else lists()}
 function renderParams(p){P=p;const ch=p.fields.filter(f=>f.r!=f.ro);
   $('pHead').textContent=p.busy?'Reading / writing...':p.have?`Parameters read ${p.when} · check ${p.sum.toString(16).toUpperCase().padStart(5,'0')}`:'Parameters not read yet';
@@ -178,13 +191,20 @@ $('pWrite').onclick=()=>{const ch=P.fields.filter(f=>f.r!=f.ro);$('mBody').inner
   <p class="${L.linked&&L.rpm==0?'gr':'re'}"><b>${L.linked&&L.rpm==0?'Bike stopped (0 RPM)':'Stop the bike first: writing needs 0 RPM'}</b></p><p class="sub" style="font-size:13px">Backup #${P.lastBackup} of the current values is kept. Values are read back to verify.</p>`;$('modal').style.display='flex'};
 $('mGo').onclick=async()=>{$('modal').style.display='none';const r=await fetch('/api/params/write?confirm=yes');const j=await r.json();if(j.error){alert(j.error);return}renderParams(j);pollParams()};
 // ---------- setup
-const SL=[['dash','Screen dashboard',['A Sport Arc','B Digital Race','C Twin Gauge']],['speedSrc','Speed source',['RPM','GPS','AUTO']],['logRate','Log rate',['MAX','10 Hz','5 Hz','2 Hz','1 Hz']],['cells','Battery cells (S)'],['cellEmptyMv','Cell empty (mV)',null,50],['cellFullMv','Cell full (mV)',null,50],['maxKmh','Gauge max km/h',null,10],['maxAmp','Gauge max A',null,50],['backlight','Screen backlight (1-5)'],['wifi','Wi-Fi hotspot',['OFF','ON']],['tzHours','Time zone (UTC+)'],['rollout','Drag rollout',['OFF (0 ft)','1 ft (strip)']],['gpsRate','GPS rate',['10 Hz','25 Hz (M10)']],['tyreW','Tyre width (mm)',null,5],['tyreA','Tyre aspect (%)',null,5],['tyreR','Rim (inch)'],['wheelCorr','Wheel correction (0.1 %)'],['ratioX100','Gear ratio x100',null,5]];
-async function settings(){const s=await api('/api/settings');
+const SL=[['dash','Screen dashboard',['A Sport Arc','B Digital Race','C Twin Gauge']],['speedSrc','Speed source',['RPM','GPS','AUTO']],['logRate','Log rate',['MAX','10 Hz','5 Hz','2 Hz','1 Hz']],['cells','Battery cells (S)'],['cellEmptyMv','Cell empty (mV)',null,50],['cellFullMv','Cell full (mV)',null,50],['maxKmh','Gauge max km/h',null,10],['maxAmp','Gauge max A',null,50],['backlight','Screen backlight (1-5)'],['wifi','Wi-Fi hotspot',['OFF','ON']],['tzHours','Time zone (UTC+)'],['rollout','Drag rollout',['OFF (0 ft)','1 ft (strip)']],['gpsRate','GPS rate',['10 Hz','25 Hz (M10)']],['tyreW','Tyre width (mm)',null,5],['tyreA','Tyre aspect (%)',null,5],['tyreR','Rim (inch)'],['wheelCorr','Wheel correction (0.1 %)'],['ratioX100','Gear ratio x100',null,5],['maxG10','Max traction (0.1 g, wheel spin)']];
+async function settings(){ota();const s=await api('/api/settings');
   $('setList').innerHTML=SL.filter(x=>!(s.headless&&['dash','backlight','wifi'].includes(x[0]))).map(([k,n,opt,st])=>`<div class="field"><div class="n">${n}</div><div class="val">${opt?opt[s[k]]:s[k]}</div><div class="step"><button onclick="setv('${k}',${s[k]-(st||1)})">−</button><button onclick="setv('${k}',${s[k]+(st||1)})">+</button></div></div>`).join('')+
    `<div class="field"><div class="n">Wheel circumference</div><div class="val ye">${s.circMm.toFixed(0)} mm · ${f1(s.kmhAt1000)} km/h @1000 rpm</div></div>`;
   KA1=s.kmhAt1000/1000;
   $('devInfo').innerHTML=`${L.fw||''}<br>Controller: ${L.linked?'<span class="gr">connected</span> · '+L.baud+' baud · '+L.hz.toFixed(1)+' Hz':'<span class="re">no data</span>'}<br>GPS: ${L.gps&&L.gps.seen?(L.gps.ubx?'u-blox ':'NMEA ')+(L.gps.fix?'fix':'no fix')+' · '+L.gps.sats+' sats · '+L.gps.hz.toFixed(0)+' Hz':'not connected'}<br>Log storage: ${L.sd?'SD card':'internal'} · ${L.freeKB} KB free`}
 function setv(k,v){api('/api/set',{k,v}).then(()=>settings())}
+async function ota(){try{const o=await api('/api/ota');
+  $('wStat').innerHTML=o.netOn?(o.connected?`<span class="gr">Connected to ${o.ssid} · ${o.ip}</span>`:`Connecting to ${o.ssid}...`):'Not set. The board joins this network to download updates; its own hotspot stays on.';
+  $('uVer').textContent='Installed '+o.version+(o.latest?' · latest '+o.latest:'');$('uMsg').textContent=(o.rolledBack?'Last update did not start - previous version restored. ':'')+o.msg;$('uMsg').className=o.state==4||o.rolledBack?'re':o.available?'ye':'mut';
+  $('uInst').disabled=!o.available||o.state==2;$('uInst').textContent=o.available?'INSTALL '+o.latest:'INSTALL';
+  $('uBarW').style.display=o.state==2?'block':'none';$('uBar').style.width=o.progress+'%';if(o.state==1||o.state==2)setTimeout(ota,800)}catch(e){}}
+async function otaDo(c){const r=await fetch('/api/ota/'+c);const j=await r.json();if(j.error)alert(j.error);setTimeout(ota,300)}
+async function saveWifi(){await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({ssid:$('wSsid').value,pass:$('wPass').value})});$('wPass').value='';setTimeout(ota,1500)}
 api("/api/settings").then(s=>{KA1=s.kmhAt1000/1000}).catch(()=>{});
 live();
 </script>

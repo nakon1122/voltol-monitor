@@ -8,6 +8,7 @@
 #include "config.h"
 #include "logger.h"
 #include "web.h"
+#include "ota.h"
 
 namespace web {
 static WebServer srv(80);
@@ -15,6 +16,8 @@ static bool on = false;
 static ApiFn apiFn;
 static TimeFn setTime;
 static char ssidBuf[24];
+static bool srvStarted = false;
+static String uploadErr;
 
 #include "web_page.h"  // gzip of assets/web/index.html (tools/embed_web.py)
 
@@ -73,33 +76,45 @@ void begin(ApiFn api, TimeFn time) {
   srv.on(
       "/update", HTTP_POST,
       [] {
+        const char *st = "<meta name=viewport content='width=device-width'><body style='background:#05070A;color:#E8EDF2;font-family:sans-serif;padding:20px'>";
+        if (uploadErr.length()) {
+          srv.send(200, "text/html", String(st) + "<h2 style='color:#FF3B30'>Update refused</h2><p>" + uploadErr + "</p><a href='/' style='color:#4FC3FF'>Back</a>");
+          return;
+        }
         bool ok = !Update.hasError();
-        srv.send(200, "text/html", ok ? "<h2>Update OK - restarting</h2>" : "<h2>Update FAILED</h2>");
-        if (ok) { delay(800); ESP.restart(); }
+        srv.send(200, "text/html", String(st) + (ok ? "<h2>Update OK - restarting</h2><p>Reconnect in 20 s.</p>" : "<h2 style='color:#FF3B30'>Update FAILED</h2><a href='/' style='color:#4FC3FF'>Back</a>"));
+        if (ok) { ota::markPending(); delay(800); ESP.restart(); }
       },
       [] {
         HTTPUpload &u = srv.upload();
-        if (u.status == UPLOAD_FILE_START) Update.begin(UPDATE_SIZE_UNKNOWN);
+        if (u.status == UPLOAD_FILE_START) {
+          const char *why = ota::uploadBlocked();
+          uploadErr = why ? why : "";
+          if (!why) Update.begin(UPDATE_SIZE_UNKNOWN);
+        } else if (uploadErr.length()) return;
         else if (u.status == UPLOAD_FILE_WRITE) Update.write(u.buf, u.currentSize);
         else if (u.status == UPLOAD_FILE_END) Update.end(true);
+        else if (u.status == UPLOAD_FILE_ABORTED) Update.abort();
       });
 }
+// Hotspot on/off. The internet Wi-Fi (ota.cpp) can run at the same time; the
+// web page is then also reachable from the home network.
 void enable(bool en) {
-  if (en == on) return;
+  if (en == on && srvStarted) return;
   on = en;
+  bool sta = ota::staConfigured();
   if (en) {
     uint8_t mac[6];
     WiFi.macAddress(mac);
     snprintf(ssidBuf, sizeof ssidBuf, "VOLTOL-%02X%02X", mac[4], mac[5]);
-    WiFi.mode(WIFI_AP);
+    WiFi.mode(sta ? WIFI_AP_STA : WIFI_AP);
     WiFi.softAP(ssidBuf, AP_PASSWORD);
-    srv.begin();
   } else {
-    srv.stop();
     WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_OFF);
+    WiFi.mode(sta ? WIFI_STA : WIFI_OFF);
   }
+  if ((en || sta) && !srvStarted) { srv.begin(); srvStarted = true; }
 }
-void loop() { if (on) srv.handleClient(); }
+void loop() { if (srvStarted) srv.handleClient(); }
 const char *ssid() { return on ? ssidBuf : "off"; }
 }  // namespace web

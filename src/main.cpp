@@ -11,6 +11,7 @@
 #include "gps.h"
 #include "link.h"
 #include "logger.h"
+#include "ota.h"
 #include "ride.h"
 #include "ui.h"
 #include "web.h"
@@ -50,7 +51,7 @@ static void shortWhen(char *out, int n) {  // "03 Nov 18:42"
 }
 
 // -------------------------------------------------------------- settings ----
-static const uint8_t CFG_VER = 3;
+static const uint8_t CFG_VER = 4;
 static void loadSettings() {
   Preferences p;
   p.begin("voltol", true);
@@ -137,10 +138,27 @@ static bool useGps() { return cfg.speedSrc != 0 && gpsUsable(); }
 // Good enough to time a drag run from GPS.
 static bool gpsDragOk() { return gpsUsable() && S.gpsSats >= 6 && (!S.gpsUbx || S.gpsSAcc <= 1.0f); }
 static bool dragOnGps() { return cfg.speedSrc == 1 || (cfg.speedSrc == 2 && (gpsUsable() || !vlink::alive())); }
+// Hybrid launch: first two moving RPM samples, extrapolated back to 0 km/h.
+static double hyT0 = -1, hyT1 = -1, hyV1 = 0, hyStill = -1;
 static void armDrag() {
-  drag.cfg = dragOnGps() ? ride::DragCfg::gps(cfg.rollout) : ride::DragCfg::rpm(cfg.rollout);
+  double g = cfg.maxG10 / 10.0;
+  drag.cfg = dragOnGps() ? ride::DragCfg::gps(cfg.rollout, g) : ride::DragCfg::rpm(cfg.rollout, g);
   drag.arm();
   S.dragWaitGps = drag.cfg.fitN > 2 && !gpsDragOk();
+  hyT0 = hyT1 = hyStill = -1;
+}
+static void hybridRpm(double t, float kmh) {
+  using ride::DragTimer;
+  if (drag.cfg.fitN <= 2 || (drag.state != DragTimer::READY && drag.state != DragTimer::RUN)) return;
+  if (kmh <= 0.05f) { if (hyT0 < 0) hyStill = t; return; }
+  if (hyT0 < 0) { hyT0 = t; hyV1 = kmh; return; }
+  if (hyT1 < 0) {
+    hyT1 = t;
+    double est = kmh > hyV1 ? hyT0 - hyV1 * (t - hyT0) / (kmh - hyV1) : hyT0;
+    if (hyStill >= 0 && est < hyStill) est = hyStill;
+    if (est > hyT0) est = hyT0;
+    drag.launchHint(est);
+  }
 }
 // One GPS speed sample (t = seconds on the millis clock).
 static void gpsSample(double t, float kmh) {
@@ -253,6 +271,13 @@ static void onLive(const votol::Live &d, uint32_t ms) {
   S.trip.add(t, S.kmh, d.amp, d.volt);
   S.odoKm = odoBase + S.trip.distM / 1000;
   if (drag.cfg.fitN <= 2) drag.feed(t, rpmKmh, d.amp, d.volt);  // armed in RPM mode
+  else hybridRpm(t, rpmKmh);                                      // GPS run: launch moment from RPM
+  // wheel slip: wheel speed (RPM) vs ground speed (GPS)
+  S.slipOk = gpsUsable() && S.gpsKmh > 10;
+  if (S.slipOk) {
+    S.slipPct = (rpmKmh - S.gpsKmh) / S.gpsKmh * 100;
+    drag.slip(S.slipPct);
+  }
   logger::Row row = {d, S.kmh, S.trip.distM};
   char ts[32];
   stamp(ts, sizeof ts, ms);
@@ -360,6 +385,8 @@ static String liveJsonLocked() {
   J d; d.t("state", DRAG_STATE[drag.state]).n("el", drag.elapsed(millis() / 1000.0), 2).n("dist", drag.distance())
         .n("spd", drag.speedKmh()).b("gps", drag.cfg.fitN > 2).b("wait", S.dragWaitGps).b("roll", cfg.rollout)
         .raw("sp", splitsJson(drag.r)).n("peakA", drag.r.peakA, 0).n("peakKw", drag.r.peakKw).b("spin", drag.r.wheelspin)
+        .b("spinCorr", drag.r.spinCorrected).n("maxSlip", drag.r.maxSlip, 0).b("slipOk", S.slipOk).n("slip", S.slipPct, 0)
+        .b("hybrid", drag.cfg.fitN > 2 && S.linked)
         .b("haveBest", S.haveBest).raw("best", splitsJson(S.best)).t("bestWhen", S.bestWhen);
   char gs[2] = {S.linked ? "LMHS"[S.live.gear()] : '-', 0};
   J j;
@@ -421,16 +448,16 @@ static String paramsJson() {
 // Settings exposed to the web page: key, pointer, min, max.
 struct SetDef { const char *k; int lo, hi; };
 static const SetDef SETS[] = {{"dash", 0, 2}, {"speedSrc", 0, 2}, {"logRate", 0, 4}, {"cells", 6, 40},
-  {"cellEmptyMv", 2000, 4000}, {"cellFullMv", 3000, 4400}, {"maxKmh", 40, 300}, {"maxAmp", 50, 1000},
+  {"cellEmptyMv", 2000, 4000}, {"cellFullMv", 3000, 4400}, {"maxKmh", 40, 400}, {"maxAmp", 50, 1500},
   {"backlight", 1, 5}, {"wifi", 0, 1}, {"tzHours", -12, 14}, {"rollout", 0, 1}, {"gpsRate", 0, 1},
-  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}};
+  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}};
 static int setGet(int i) {
   switch (i) {
   case 0: return cfg.dash; case 1: return cfg.speedSrc; case 2: return cfg.logRate; case 3: return cfg.cells;
   case 4: return cfg.cellEmptyMv; case 5: return cfg.cellFullMv; case 6: return cfg.maxKmh; case 7: return cfg.maxAmp;
   case 8: return cfg.backlight; case 9: return cfg.wifi; case 10: return cfg.tzHours; case 11: return cfg.rollout;
   case 12: return cfg.gpsRate; case 13: return cfg.tyreW; case 14: return cfg.tyreA; case 15: return cfg.tyreR;
-  case 16: return cfg.wheelCorr; default: return cfg.ratioX100;
+  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; default: return cfg.maxG10;
   }
 }
 static void setPut(int i, int v) {
@@ -447,8 +474,45 @@ static void setPut(int i, int v) {
   case 10: cfg.tzHours = v; break; case 11: cfg.rollout = v; break;
   case 12: cfg.gpsRate = v; vlink::requestGpsConfig(v ? 25 : 10); break; case 13: cfg.tyreW = v; break;
   case 14: cfg.tyreA = v; break; case 15: cfg.tyreR = v; break; case 16: cfg.wheelCorr = v; break;
-  default: cfg.ratioX100 = v; break;
+  case 17: cfg.ratioX100 = v; break;
+  default: cfg.maxG10 = v; break;
   }
+}
+// ---- launch profiles (Street / Launch) ----
+static void saveProf() {
+  Preferences p;
+  p.begin("voltol", false);
+  p.putBytes("prof", &S.prof, sizeof S.prof);
+  p.end();
+}
+static int profParam(int f) {
+  for (int i = 0; i < votol::PARAM_COUNT; i++) if (!strcmp(votol::PARAMS[i].name, PROF_FIELDS[f])) return i;
+  return 0;
+}
+static String profJson() {
+  String o = "[";
+  for (int q = 0; q < 2; q++) {
+    J j; j.b("have", S.prof.have[q]);
+    String v = "[";
+    for (int f = 0; f < 3; f++) v += String(f ? "," : "") + String((long)S.prof.v[q][f]);
+    j.raw("v", v + "]");
+    o += (q ? "," : "") + j.obj();
+  }
+  String n = "[", now = "[";
+  for (int f = 0; f < 3; f++) {
+    n += String(f ? "," : "") + "\"" + PROF_FIELDS[f] + "\"";
+    now += String(f ? "," : "") + String((long)(S.params.complete() ? votol::getRaw(S.params.b, votol::PARAMS[profParam(f)]) : 0));
+  }
+  J j; j.raw("p", o + "]").raw("names", n + "]").raw("now", now + "]").b("have", S.params.complete());
+  return j.obj();
+}
+static String otaJson() {
+  const ota::Status &o = ota::status();
+  J j;
+  j.t("version", VOLTOL_FW).b("netOn", ota::staConfigured()).t("ssid", ota::staSsid()).b("connected", o.connected)
+   .t("ip", o.ip).b("available", o.available).t("latest", o.latest).i("state", o.state).i("progress", o.progress)
+   .t("msg", o.msg).b("rolledBack", o.rolledBack);
+  return j.obj();
 }
 static String settingsJson() {
   J j;
@@ -500,13 +564,53 @@ static String api(const String &path, const std::function<String(const char *)> 
     out = settingsJson();
   } else if (path == "/api/clearfaults") { a.clearFaults = true; doActions(a); out = "{}"; }
   else if (path == "/api/newtrip") { a.newTrip = true; doActions(a); out = "{}"; }
+  else if (path == "/api/ota") out = otaJson();
+  else if (path == "/api/ota/check") { ota::check(); out = otaJson(); }
+  else if (path == "/api/ota/install") {
+    const char *why = ota::uploadBlocked();
+    if (why) { code = 409; J j; j.t("error", why); out = j.obj(); } else { ota::install(); out = otaJson(); }
+  } else if (path == "/api/wifi") { ota::setWifi(arg("ssid").c_str(), arg("pass").c_str()); web::enable(cfg.wifi); out = otaJson(); }
+  else if (path == "/api/profile") out = profJson();
+  else if (path == "/api/profile/set") {
+    int q = arg("p").toInt() & 1, f = arg("f").toInt();
+    if (f >= 0 && f < 3) {
+      const votol::ParamDef &d = votol::PARAMS[profParam(f)];
+      int32_t v = arg("raw").toInt();
+      S.prof.v[q][f] = v < d.min ? d.min : v > d.max ? d.max : v;
+      if (!S.prof.have[q] && S.params.complete())
+        for (int k = 0; k < 3; k++) if (k != f) S.prof.v[q][k] = votol::getRaw(S.params.b, votol::PARAMS[profParam(k)]);
+      S.prof.have[q] = 1;
+      saveProf();
+    }
+    out = profJson();
+  } else if (path == "/api/profile/capture") {
+    int q = arg("p").toInt() & 1;
+    if (S.params.complete()) {
+      for (int k = 0; k < 3; k++) S.prof.v[q][k] = votol::getRaw(S.params.b, votol::PARAMS[profParam(k)]);
+      S.prof.have[q] = 1; saveProf();
+    }
+    out = profJson();
+  } else if (path == "/api/profile/apply") {
+    int q = arg("p").toInt() & 1;
+    if (S.prof.have[q] && S.params.complete())
+      for (int k = 0; k < 3; k++) votol::setRaw(S.edit, votol::PARAMS[profParam(k)], S.prof.v[q][k]);
+    out = paramsJson();
+  }
   else { code = 404; out = "{\"error\":\"unknown\"}"; }
   UNLOCK();
   return out;
 }
 
 // ------------------------------------------------------------------ setup ----
+// Updating is refused while riding or timing a run.
+static const char *updateGuard() {
+  if (vlink::alive() && S.live.rpm != 0) return "Motor turning: stop the bike (0 RPM) to update";
+  if (drag.state == ride::DragTimer::RUN) return "Drag run in progress";
+  return nullptr;
+}
+
 void setup() {
+  ota::bootCheck();  // boot-loop protection after an update
   Serial.begin(115200);
   lock = xSemaphoreCreateMutex();
   loadSettings();
@@ -529,11 +633,17 @@ void setup() {
       S.haveBest = true;
       p.getString("bestw", S.bestWhen, sizeof S.bestWhen);
     }
+    p.getBytes("prof", &S.prof, sizeof S.prof);
     p.end();
   }
   Serial1.setRxBufferSize(2048);
   Serial1.begin(GPS_BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   web::begin(api, setClock);
+#ifdef VOLTOL_HEADLESS
+  ota::begin("s3", updateGuard);
+#else
+  ota::begin("cyd35", updateGuard);
+#endif
 #ifdef VOLTOL_HEADLESS
   cfg.wifi = 1;
 #endif
@@ -569,11 +679,31 @@ static void doActions(UiActions &a) {
     cfgDirtyAt = millis(); displayBacklight(cfg.backlight); web::enable(cfg.wifi);
   }
   if (a.newTrip) newTrip(false);
+  if (a.checkUpdate) ota::check();
+  if (a.installUpdate) {
+    const char *why = updateGuard();
+    if (why) strlcpy(S.updMsg, why, sizeof S.updMsg); else ota::install();
+  }
+  if (a.profChanged) saveProf();
 }
 
 void loop() {
   uint32_t now = millis();
   web::loop();
+  ota::loop();
+  {
+    const ota::Status &o = ota::status();
+    S.netOn = ota::staConfigured();
+    strlcpy(S.netSsid, ota::staSsid(), sizeof S.netSsid);
+    S.netConnected = o.connected;
+    strlcpy(S.netIp, o.ip, sizeof S.netIp);
+    S.updAvailable = o.available;
+    strlcpy(S.updLatest, o.latest, sizeof S.updLatest);
+    if (o.msg[0]) strlcpy(S.updMsg, o.msg, sizeof S.updMsg);
+    S.updState = o.state;
+    S.updProgress = o.progress;
+    S.rolledBack = o.rolledBack;
+  }
   gpsPoll();
   // link status
   S.linked = vlink::alive();
@@ -602,7 +732,7 @@ void loop() {
     logger::dragRow(r);
     S.runN = logger::loadDrag(S.runs, 10);
     UNLOCK();
-    if (!S.haveBest || drag.r.s[3].t < S.best.s[3].t) {
+    if (!drag.r.spinCorrected && (!S.haveBest || drag.r.s[3].t < S.best.s[3].t)) {
       pending = drag.r; strlcpy(pendingWhen, r.when, sizeof pendingWhen); pendingBest = true;
       Preferences p;
       p.begin("voltol", false);

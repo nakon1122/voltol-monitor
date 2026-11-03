@@ -36,7 +36,9 @@ struct Split {
 struct DragResult {
   Split s[SPLITS];
   float peakA = 0, peakKw = 0, minV = 0;
-  bool wheelspin = false;  // acceleration > 1.2 g seen (wheel slip suspected)
+  bool wheelspin = false;      // wheel accelerated faster than "max traction" (slip suspected)
+  bool spinCorrected = false;  // RPM-only run: speed was limited to max traction while slipping
+  float maxSlip = 0;           // highest wheel slip vs GPS, % (hybrid mode)
   bool finished() const { return s[SPLITS - 1].done; }
 };
 
@@ -47,9 +49,13 @@ struct DragCfg {
   double readyKmh = 0.05, holdS = 0, startKmh = 0.05;
   int fitN = 2;          // samples used to find the launch (least squares)
   bool rollout = false;  // drag-strip style: clock starts after the first foot
-  static DragCfg rpm(bool roll) { DragCfg c; c.rollout = roll; return c; }
-  static DragCfg gps(bool roll) {
-    DragCfg c; c.readyKmh = 1.0; c.holdS = 1.0; c.startKmh = 3.0; c.fitN = 6; c.rollout = roll; return c;
+  double maxG = 1.6;     // max traction: faster wheel acceleration = wheel spin
+  bool clampG = false;   // RPM only: limit speed to maxG while the wheel spins
+  static DragCfg rpm(bool roll, double g = 1.6) {
+    DragCfg c; c.rollout = roll; c.maxG = g; c.clampG = true; return c;
+  }
+  static DragCfg gps(bool roll, double g = 1.6) {
+    DragCfg c; c.readyKmh = 1.0; c.holdS = 1.0; c.startKmh = 3.0; c.fitN = 6; c.rollout = roll; c.maxG = g; return c;
   }
 };
 static const double ROLLOUT_M = 0.3048;
@@ -62,6 +68,10 @@ public:
   DragCfg cfg;
 
   void arm() { state = ARMED; reset(); }
+  // Hybrid (GPS + controller): the moment the wheel started turning, from RPM,
+  // on the same clock as feed(). Used instead of the GPS extrapolation.
+  void launchHint(double t) { if (state == READY || state == RUN) hint = t; }
+  void slip(float pct) { if (state == RUN && pct > r.maxSlip) r.maxSlip = pct; }
   void cancel() { state = IDLE; }
   // t in seconds (monotonic), v in km/h, plus current/voltage for statistics.
   void feed(double t, double kmh, float amp = 0, float volt = 0) {
@@ -99,6 +109,7 @@ public:
         double lo = launchLo - (slope > 0 ? cfg.readyKmh / 3.6 / slope : 0);
         if (est < lo) est = lo;
         if (est > bt[0]) est = bt[0];
+        if (hint >= 0 && hint >= lo - 0.5 && hint <= bt[0]) est = hint;
         ts = est;
         first = false;
         dist = 0; lt = ts; lv = 0;
@@ -123,12 +134,12 @@ public:
   double speedKmh() const { return lv * 3.6; }
 
 private:
-  double tPrev = 0, launchLo = 0, ts = 0, lt = 0, lv = 0, dist = 0, stopAt = -1, holdFrom = -1, rollT = -1;
+  double tPrev = 0, launchLo = 0, ts = 0, lt = 0, lv = 0, dist = 0, stopAt = -1, holdFrom = -1, rollT = -1, hint = -1;
   double bt[8], bv[8];
   float ba[8], secPeak = 0;
   int next = 0, nb = 0;
   bool first = false;
-  void reset() { r = DragResult(); next = 0; dist = 0; lv = 0; stopAt = -1; secPeak = 0; holdFrom = -1; rollT = -1; }
+  void reset() { r = DragResult(); next = 0; dist = 0; lv = 0; stopAt = -1; secPeak = 0; holdFrom = -1; rollT = -1; hint = -1; }
   // time (s from launch) at which distance `need` from the segment start is reached
   static double solve(double need, double lv, double k, double dt) {
     double tau;
@@ -149,8 +160,12 @@ private:
     double dt = t - lt;
     if (dt <= 0) return;
     if (amp > secPeak) secPeak = amp;
+    double amax = cfg.maxG * 9.81;
+    if ((v - lv) / dt > amax) {
+      r.wheelspin = true;
+      if (cfg.clampG) { v = lv + amax * dt; r.spinCorrected = true; }
+    }
     double k = (v - lv) / dt;
-    if (k > 1.2 * 9.81) r.wheelspin = true;
     double dEnd = dist + (lv + v) * 0.5 * dt;
     if (rollT < 0 && ROLLOUT_M <= dEnd) rollT = lt + solve(ROLLOUT_M - dist, lv, k, dt) - ts;
     while (next < SPLITS && SPLIT_M[next] <= dEnd) {

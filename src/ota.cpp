@@ -1,0 +1,237 @@
+// Firmware updates.
+//  * Boot-loop protection: after an update the new firmware must run for 60 s.
+//    If it restarts 3 times before that, the previous firmware is booted again.
+//  * Internet update: the board joins a Wi-Fi network (home router or phone
+//    hotspot), reads version.json from GitHub (branch firmware-build, written
+//    by the build), downloads the matching *_APP_UPDATE.bin, checks its SHA-256
+//    and only then switches to it. Never while the motor turns (guard).
+#include <Arduino.h>
+#include <Preferences.h>
+#include <Update.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <esp_ota_ops.h>
+#include <mbedtls/sha256.h>
+#include "config.h"
+#include "github_ca_bundle.h"
+#include "ota.h"
+
+// Keep the new image "pending" until markGood() (bootloader rollback, if built in).
+extern "C" bool verifyRollbackLater() { return true; }
+
+namespace ota {
+static const char *HOST = "raw.githubusercontent.com";
+static const char *PATH = "/nakon1122/voltol-monitor/firmware-build/firmware/";
+static Status st;
+static GuardFn guard = nullptr;
+static const char *board = "cyd35";
+static char ssid[33], pass[65];
+static volatile int request = 0;  // 1 check, 2 install
+static String wantSha, wantFile;
+static uint32_t wantSize = 0, lastCheck = 0, upSince = 0;
+static bool staWanted = false;
+
+// ------------------------------------------------------------ rollback ----
+void bootCheck() {
+  Preferences p;
+  p.begin("voltol-ota", false);
+  st.rolledBack = p.getBool("rolled", false);
+  if (p.getBool("pend", false)) {
+    uint8_t n = p.getUChar("boots", 0) + 1;
+    p.putUChar("boots", n);
+    if (n >= 3) {
+      const esp_partition_t *other = esp_ota_get_next_update_partition(nullptr);
+      p.putBool("pend", false);
+      p.putUChar("boots", 0);
+      p.putBool("rolled", true);
+      p.end();
+      if (other && esp_ota_set_boot_partition(other) == ESP_OK) ESP.restart();
+      return;
+    }
+  }
+  p.end();
+}
+void markPending() {
+  Preferences p;
+  p.begin("voltol-ota", false);
+  p.putBool("pend", true);
+  p.putUChar("boots", 0);
+  p.putBool("rolled", false);
+  p.end();
+}
+static void markGood() {
+  Preferences p;
+  p.begin("voltol-ota", false);
+  if (p.getBool("pend", false)) { p.putBool("pend", false); p.putUChar("boots", 0); }
+  p.end();
+  esp_ota_mark_app_valid_cancel_rollback();
+}
+
+// ---------------------------------------------------------------- wifi ----
+bool staConfigured() { return ssid[0] != 0; }
+const char *staSsid() { return ssid; }
+void setWifi(const char *s, const char *pw) {
+  strlcpy(ssid, s, sizeof ssid);
+  strlcpy(pass, pw, sizeof pass);
+  Preferences p;
+  p.begin("voltol-net", false);
+  p.putString("ssid", ssid);
+  p.putString("pass", pass);
+  p.end();
+  st.connected = false;
+  if (ssid[0]) {
+    WiFi.mode(WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA ? WIFI_AP_STA : WIFI_STA);
+    WiFi.begin(ssid, pass);
+  } else {
+    WiFi.disconnect(true, true);
+  }
+}
+
+static int cmpVer(const char *a, const char *b) {
+  int x[3] = {0}, y[3] = {0};
+  sscanf(a, "%d.%d.%d", &x[0], &x[1], &x[2]);
+  sscanf(b, "%d.%d.%d", &y[0], &y[1], &y[2]);
+  for (int i = 0; i < 3; i++) if (x[i] != y[i]) return x[i] < y[i] ? -1 : 1;
+  return 0;
+}
+static String field(const String &js, int from, const char *key) {
+  String k = String("\"") + key + "\"";
+  int i = js.indexOf(k, from);
+  if (i < 0) return "";
+  i = js.indexOf(':', i) + 1;
+  while (i < (int)js.length() && (js[i] == ' ' || js[i] == '"')) i++;
+  int e = i;
+  while (e < (int)js.length() && js[e] != '"' && js[e] != ',' && js[e] != '}') e++;
+  return js.substring(i, e);
+}
+// Minimal HTTPS GET; leaves the client positioned at the body. Returns content length.
+static long get(WiFiClientSecure &c, const String &path) {
+  c.setCACertBundle(GITHUB_CA_BUNDLE);
+  c.setTimeout(15);
+  if (!c.connect(HOST, 443)) return -1;
+  c.printf("GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: voltol-monitor\r\nConnection: close\r\n\r\n", path.c_str(), HOST);
+  String line = c.readStringUntil('\n');
+  if (line.indexOf(" 200") < 0) return -2;
+  long len = -3;
+  for (;;) {
+    line = c.readStringUntil('\n');
+    line.trim();
+    if (!line.length()) break;
+    if (line.startsWith("Content-Length:") || line.startsWith("content-length:")) len = line.substring(15).toInt();
+  }
+  return len;
+}
+static void doCheck() {
+  st.state = S_CHECKING;
+  WiFiClientSecure c;
+  long n = get(c, String(PATH) + "version.json");
+  if (n < 0) {
+    st.state = S_ERROR;
+    snprintf(st.msg, sizeof st.msg, n == -1 ? "Cannot reach GitHub" : "version.json not found");
+    return;
+  }
+  String js = c.readString();
+  c.stop();
+  String ver = field(js, 0, "version");
+  int b = js.indexOf(String("\"") + board + "\"");
+  if (!ver.length() || b < 0) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "Bad version.json"); return; }
+  wantFile = field(js, b, "file");
+  wantSha = field(js, b, "sha256");
+  wantSize = field(js, b, "size").toInt();
+  strlcpy(st.latest, ver.c_str(), sizeof st.latest);
+  st.available = cmpVer(VOLTOL_FW, st.latest) < 0;
+  st.state = S_IDLE;
+  snprintf(st.msg, sizeof st.msg, st.available ? "Version %s available" : "Up to date (%s)", st.latest);
+}
+static void doInstall() {
+  if (!st.available) doCheck();
+  if (!st.available) return;
+  const char *why = guard ? guard() : nullptr;
+  if (why) { st.state = S_ERROR; strlcpy(st.msg, why, sizeof st.msg); return; }
+  st.state = S_DOWNLOADING;
+  st.progress = 0;
+  WiFiClientSecure c;
+  long n = get(c, String(PATH) + wantFile);
+  if (n <= 0 || (wantSize && (uint32_t)n != wantSize)) {
+    st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "Download failed (%ld)", n); c.stop(); return;
+  }
+  if (!Update.begin(n)) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "No space for update"); c.stop(); return; }
+  mbedtls_sha256_context sha;
+  mbedtls_sha256_init(&sha);
+  mbedtls_sha256_starts(&sha, 0);
+  static uint8_t buf[2048];
+  long done = 0;
+  uint32_t lastData = millis();
+  while (done < n && millis() - lastData < 20000) {
+    int k = c.read(buf, sizeof buf);
+    if (k <= 0) { delay(5); continue; }
+    lastData = millis();
+    mbedtls_sha256_update(&sha, buf, k);
+    if (Update.write(buf, k) != (size_t)k) break;
+    done += k;
+    st.progress = done * 100 / n;
+  }
+  c.stop();
+  uint8_t h[32];
+  mbedtls_sha256_finish(&sha, h);
+  mbedtls_sha256_free(&sha);
+  char hex[65];
+  for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", h[i]);
+  if (done != n || wantSha != hex) {
+    Update.abort();
+    st.state = S_ERROR;
+    snprintf(st.msg, sizeof st.msg, done != n ? "Download interrupted" : "Checksum mismatch - not installed");
+    return;
+  }
+  if (!Update.end(true)) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "Install failed"); return; }
+  markPending();
+  st.state = S_RESTARTING;
+  snprintf(st.msg, sizeof st.msg, "Installed %s - restarting", st.latest);
+  delay(1500);
+  ESP.restart();
+}
+static void task(void *) {
+  for (;;) {
+    if (request) {
+      int r = request;
+      request = 0;
+      if (!st.connected) { st.state = S_ERROR; snprintf(st.msg, sizeof st.msg, "No internet Wi-Fi connection"); }
+      else if (r == 1) doCheck();
+      else doInstall();
+    }
+    vTaskDelay(pdMS_TO_TICKS(200));
+  }
+}
+
+void begin(const char *boardKey, GuardFn g) {
+  board = boardKey;
+  guard = g;
+  upSince = millis();
+  Preferences p;
+  p.begin("voltol-net", true);
+  p.getString("ssid", ssid, sizeof ssid);
+  p.getString("pass", pass, sizeof pass);
+  p.end();
+  staWanted = ssid[0];
+  if (staWanted) {
+    WiFi.mode(WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA ? WIFI_AP_STA : WIFI_STA);
+    WiFi.begin(ssid, pass);
+  }
+  xTaskCreatePinnedToCore(task, "ota", 10240, nullptr, 1, nullptr, 1);
+}
+void loop() {
+  static bool good = false;
+  if (!good && millis() - upSince > 60000) { good = true; markGood(); }
+  bool c = ssid[0] && WiFi.status() == WL_CONNECTED;
+  if (c && !st.connected) {
+    strlcpy(st.ip, WiFi.localIP().toString().c_str(), sizeof st.ip);
+    if (!lastCheck || millis() - lastCheck > 6UL * 3600 * 1000) { lastCheck = millis(); request = 1; }
+  }
+  st.connected = c;
+  if (!c) st.ip[0] = 0;
+}
+void check() { request = 1; }
+void install() { request = 2; }
+const Status &status() { return st; }
+const char *uploadBlocked() { return guard ? guard() : nullptr; }
+}  // namespace ota
