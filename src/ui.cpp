@@ -350,16 +350,16 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
     g.textMid(210, 14, st, F11B, sc == TEXT ? RED : sc);
   });
   g.boxed(356, 4, 116, 20, BAR, [&] { gears(g, 356, 5, 26, s); });
-  g.boxed(LX - 52, Y0 - 44, 104, 60, 0x0B1117, [&] { g.text(LX, Y0 + 14, v.kmh, s.kmh >= 99.5f ? F38B : F56B, s.linked ? TEXT : DIM, AL_C); });
-  g.boxed(RX - 52, Y0 - 44, 104, 60, 0x0B1117, [&] {
+  g.boxed(LX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] { g.text(LX, Y0 + 14, v.kmh, s.kmh >= 99.5f ? F38B : F56B, s.linked ? TEXT : DIM, AL_C); });
+  g.boxed(RX - 46, Y0 - 44, 92, 60, 0x0B1117, [&] {
     char t[8]; snprintf(t, 8, "%d", s.linked ? (int)lroundf(s.live.amp) : 0);
     g.text(RX, Y0 + 14, s.linked ? t : "--", fabsf(s.live.amp) >= 99.5f ? F38B : F56B, s.linked ? TEXT : DIM, AL_C);
   });
-  g.boxed(LX - 60, Y0 + 70, 120, 22, 0x0B1117, [&] {
-    char t[24]; snprintf(t, 24, "%s rpm", v.rpm); g.text(LX, Y0 + 86, t, F13B, SUB, AL_C);
+  g.boxed(LX - 44, Y0 + 66, 88, 18, 0x0B1117, [&] {
+    char t[24]; snprintf(t, 24, "%s rpm", v.rpm); g.text(LX, Y0 + 80, t, F13B, SUB, AL_C);
   });
-  g.boxed(RX - 60, Y0 + 70, 120, 22, 0x0B1117, [&] {
-    char t[24]; snprintf(t, 24, "%s kW", v.kw); g.text(RX, Y0 + 86, t, F13B, BLUE, AL_C);
+  g.boxed(RX - 44, Y0 + 66, 88, 18, 0x0B1117, [&] {
+    char t[24]; snprintf(t, 24, "%s kW", v.kw); g.text(RX, Y0 + 80, t, F13B, BLUE, AL_C);
   });
   g.boxed(224, 64, 32, 126, BG, [&] {
     int fh = s.linked ? 118 * s.soc / 100 : 0;

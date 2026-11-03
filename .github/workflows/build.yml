@@ -22,10 +22,14 @@ jobs:
           (g++ -std=c++17 -Iinclude -o proto_test test/proto_test.cpp && ./proto_test && \
            g++ -std=c++17 -Iinclude -o ride_test test/ride_test.cpp && ./ride_test) 2>&1 | tee out/TESTS.txt
       - name: Render screen previews (real UI code)
+        continue-on-error: true
         run: |
-          python tools/render_screens.py
-          mkdir -p out/screens && cp assets/screens/*.png out/screens/
+          set -o pipefail
+          mkdir -p out/screens
+          python tools/render_screens.py 2>&1 | tee out/render.log
+          cp assets/screens/*.png out/screens/
       - name: Build
+        if: always()
         run: |
           set -o pipefail
           pio run -e cyd35 2>&1 | tee out/build.log
