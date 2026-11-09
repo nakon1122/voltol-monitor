@@ -13,7 +13,8 @@
 #include <esp_ota_ops.h>
 #include <mbedtls/sha256.h>
 #include "config.h"
-#include "github_ca_bundle.h"
+#include "cloud_ca_bundle.h"
+#include "net.h"
 #include "ota.h"
 
 // Keep the new image "pending" until markGood() (bootloader rollback, if built in).
@@ -25,11 +26,9 @@ static const char *PATH = "/nakon1122/voltol-monitor/firmware-build/firmware/";
 static Status st;
 static GuardFn guard = nullptr;
 static const char *board = "cyd35";
-static char ssid[33], pass[65];
 static volatile int request = 0;  // 1 check, 2 install
 static String wantSha, wantFile;
 static uint32_t wantSize = 0, lastCheck = 0, upSince = 0;
-static bool staWanted = false;
 static void say(const char *fmt, const char *arg = "") {
   st.fmt = fmt;
   strlcpy(st.arg, arg, sizeof st.arg);
@@ -73,24 +72,10 @@ static void markGood() {
 }
 
 // ---------------------------------------------------------------- wifi ----
-bool staConfigured() { return ssid[0] != 0; }
-const char *staSsid() { return ssid; }
-void setWifi(const char *s, const char *pw) {
-  strlcpy(ssid, s, sizeof ssid);
-  strlcpy(pass, pw, sizeof pass);
-  Preferences p;
-  p.begin("voltol-net", false);
-  p.putString("ssid", ssid);
-  p.putString("pass", pass);
-  p.end();
-  st.connected = false;
-  if (ssid[0]) {
-    WiFi.mode(WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA ? WIFI_AP_STA : WIFI_STA);
-    WiFi.begin(ssid, pass);
-  } else {
-    WiFi.disconnect(true, true);
-  }
-}
+// Networks live in net.cpp (several saved networks, hotspot-friendly).
+bool staConfigured() { return net::count() > 0; }
+const char *staSsid() { return net::online() ? net::ssid() : (net::count() ? net::saved(0).ssid : ""); }
+void setWifi(const char *s, const char *pw) { if (s && s[0]) net::add(s, pw); st.connected = false; }
 
 static int cmpVer(const char *a, const char *b) {
   int x[3] = {0}, y[3] = {0};
@@ -111,7 +96,7 @@ static String field(const String &js, int from, const char *key) {
 }
 // Minimal HTTPS GET; leaves the client positioned at the body. Returns content length.
 static long get(WiFiClientSecure &c, const String &path) {
-  c.setCACertBundle(GITHUB_CA_BUNDLE);
+  c.setCACertBundle(CLOUD_CA_BUNDLE);
   c.setTimeout(15);
   if (!c.connect(HOST, 443)) return -1;
   c.printf("GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: voltol-monitor\r\nConnection: close\r\n\r\n", path.c_str(), HOST);
@@ -216,24 +201,14 @@ void begin(const char *boardKey, GuardFn g) {
   board = boardKey;
   guard = g;
   upSince = millis();
-  Preferences p;
-  p.begin("voltol-net", true);
-  p.getString("ssid", ssid, sizeof ssid);
-  p.getString("pass", pass, sizeof pass);
-  p.end();
-  staWanted = ssid[0];
-  if (staWanted) {
-    WiFi.mode(WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA ? WIFI_AP_STA : WIFI_STA);
-    WiFi.begin(ssid, pass);
-  }
   xTaskCreatePinnedToCore(task, "ota", 10240, nullptr, 1, nullptr, 1);
 }
 void loop() {
   static bool good = false;
   if (!good && millis() - upSince > 60000) { good = true; markGood(); }
-  bool c = ssid[0] && WiFi.status() == WL_CONNECTED;
+  bool c = net::online();
   if (c && !st.connected) {
-    strlcpy(st.ip, WiFi.localIP().toString().c_str(), sizeof st.ip);
+    strlcpy(st.ip, net::ip(), sizeof st.ip);
     if (!lastCheck || millis() - lastCheck > 6UL * 3600 * 1000) { lastCheck = millis(); request = 1; }
   }
   st.connected = c;

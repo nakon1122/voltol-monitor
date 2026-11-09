@@ -15,6 +15,10 @@
 #include "ride.h"
 #include "ui.h"
 #include "web.h"
+#include "net.h"
+#include "cloud.h"
+#include "blesetup.h"
+#include <ArduinoJson.h>
 
 static UiState S;
 static Settings cfg;
@@ -527,6 +531,108 @@ static String settingsJson() {
   return j.obj();
 }
 static void doActions(UiActions &a);
+static const char *updateGuard();
+// ------------------------------------------------------------------ cloud ----
+static volatile uint32_t restartAt = 0;
+static uint32_t dragRunId = 0;
+static int lastDragState = -1;
+static void jstr(String &o, const char *s) {
+  o += '"';
+  for (const char *p = s; *p; p++) { if (*p == '"' || *p == '\\') o += '\\'; if ((uint8_t)*p >= 0x20) o += *p; }
+  o += '"';
+}
+// Same fields as v1.6.x (the web dashboard reads them) + Wi-Fi list for remote control.
+static void cloudPayload(String &o, int &rpm, bool &moving) {
+  LOCK();
+  bool ctl = S.linked;
+  rpm = ctl ? S.live.rpm : 0;
+  if (drag.state != lastDragState) { if (drag.state == ride::DragTimer::RUN) dragRunId = millis(); lastDragState = drag.state; }
+  moving = rpm != 0 || drag.state == ride::DragTimer::RUN;
+  char b[640];
+  snprintf(b, sizeof b,
+           "{\"firmware\":\"" VOLTOL_FW "\",\"board\":\"%s\",\"controller_online\":%s,\"wifi_online\":true,\"wifi_rssi\":%d,"
+           "\"uart_baud\":%lu,\"uart_hz\":%.1f,\"valid_frames\":%lu,\"bad_frames\":%lu,"
+           "\"speed_kmh\":%.1f,\"voltage\":%.1f,\"current\":%.1f,\"power_kw\":%.2f,\"soc\":%d,"
+           "\"controller_temp_c\":%d,\"motor_temp_c\":%d,\"fault_mask\":%lu,\"gear\":\"%c\","
+           "\"gps\":{\"fix\":%s,\"sats\":%d},\"hotspot_clients\":%d,\"uptime_s\":%lu,",
+#ifdef VOLTOL_HEADLESS
+           "s3",
+#else
+           "cyd35",
+#endif
+           ctl ? "true" : "false", net::rssi(), (unsigned long)S.baud, S.hz, (unsigned long)S.frames, (unsigned long)S.errors,
+           S.speedOk ? S.kmh : 0.0f, ctl ? S.live.volt : 0.0f, ctl ? S.live.amp : 0.0f, ctl ? S.kw : 0.0f, S.soc,
+           ctl ? S.live.tCtrl : 0, ctl ? S.live.tMotor : 0, (unsigned long)(ctl ? S.live.faults : 0),
+           ctl ? "LMHS"[S.live.gear()] : '-', S.gpsFix ? "true" : "false", S.gpsSats, net::apClients(),
+           (unsigned long)(millis() / 1000));
+  o = b;
+  o += "\"wifi_ssid\":"; jstr(o, net::ssid());
+  o += ",\"wifi_saved\":[";
+  for (int i = 0; i < net::count(); i++) { if (i) o += ","; jstr(o, net::saved(i).ssid); }
+  o += "],\"hotspot\":"; jstr(o, net::apSsid());
+  o += ",\"ip\":"; jstr(o, net::ip());
+  char d[200];
+  snprintf(d, sizeof d, ",\"drag\":{\"state\":\"%s\",\"elapsed_s\":%.3f,\"distance_m\":%.1f,\"run_id\":\"%lu\",\"splits\":",
+           DRAG_STATE[drag.state], drag.elapsed(millis() / 1000.0), drag.distance(), (unsigned long)dragRunId);
+  o += d;
+  o += "[";
+  for (int i = 0; i < ride::SPLITS; i++) {
+    const ride::Split &x = drag.r.s[i];
+    char sp[96];
+    snprintf(sp, sizeof sp, "%s{\"done\":%s,\"t\":%.3f,\"v\":%.1f,\"a\":%.0f}", i ? "," : "", x.done ? "true" : "false", x.t, x.trapKmh, x.peakA);
+    o += sp;
+  }
+  o += "]}}";
+  UNLOCK();
+}
+static String cloudCmd(const String &cmd, const String &args, bool &ok) {
+  DynamicJsonDocument a(512);
+  deserializeJson(a, args);
+  String out;
+  LOCK();
+  UiActions act;
+  if (cmd == "wifi_add") {
+    const char *ss = a["ssid"] | "";
+    const char *pw = a["pass"] | "";
+    ok = net::add(ss, pw);
+    out = ok ? String("saved ") + ss : "bad network name or password";
+  } else if (cmd == "wifi_remove") {
+    const char *ss = a["ssid"] | "";
+    ok = net::remove(ss);
+    out = ok ? String("removed ") + ss : "not saved on the module";
+  } else if (cmd == "ota_check") { ota::check(); out = "checking"; }
+  else if (cmd == "ota_install") {
+    const char *why = updateGuard();
+    if (why) { ok = false; out = why; } else { ota::install(); out = "installing"; }
+  } else if (cmd == "restart") {
+    const char *why = updateGuard();
+    if (why) { ok = false; out = why; } else { restartAt = millis() + 1500; out = "restarting"; }
+  } else if (cmd == "drag_arm") { act.armDrag = true; doActions(act); out = "armed"; }
+  else if (cmd == "drag_cancel") { act.cancelDrag = true; doActions(act); out = "cancelled"; }
+  else { ok = false; out = "unknown command"; }
+  UNLOCK();
+  return out;
+}
+static String wifiJson() {
+  String o = "{\"saved\":" + net::listJson() + ",\"online\":" + String(net::online() ? "true" : "false");
+  o += ",\"ssid\":"; jstr(o, net::ssid());
+  o += ",\"ip\":"; jstr(o, net::ip());
+  o += ",\"rssi\":" + String(net::rssi()) + ",\"channel\":" + String(net::channel());
+  o += ",\"hotspot\":"; jstr(o, net::apSsid());
+  o += ",\"clients\":" + String(net::apClients()) + ",\"scanBusy\":" + String(net::scanBusy() ? "true" : "false");
+  o += ",\"scan\":" + net::scanJson() + "}";
+  return o;
+}
+static String cloudJson() {
+  String o = "{\"cloud\":" + cloud::statusJson() + ",\"ble\":";
+  jstr(o, blesetup::state());
+  o += ",\"bleLeft\":" + String(blesetup::secondsLeft()) + "}";
+  return o;
+}
+static void onBleSetup(const char *ssid, const char *pass, const char *token) {
+  net::add(ssid, pass);
+  cloud::setToken(token);
+}
 static String api(const String &path, const std::function<String(const char *)> &arg, int &code) {
   code = 200;
   LOCK();
@@ -570,7 +676,22 @@ static String api(const String &path, const std::function<String(const char *)> 
   else if (path == "/api/ota/install") {
     const char *why = ota::uploadBlocked();
     if (why) { code = 409; J j; j.t("error", why); out = j.obj(); } else { ota::install(); out = otaJson(); }
-  } else if (path == "/api/wifi") { ota::setWifi(arg("ssid").c_str(), arg("pass").c_str()); web::enable(cfg.wifi); out = otaJson(); }
+  } else if (path == "/api/wifi") {
+    String ss = arg("ssid");
+    if (ss.length()) net::add(ss.c_str(), arg("pass").c_str());
+    out = wifiJson();
+  } else if (path == "/api/wifi/list") out = wifiJson();
+  else if (path == "/api/wifi/remove") { net::remove(arg("ssid").c_str()); out = wifiJson(); }
+  else if (path == "/api/wifi/scan") { if (!net::scanBusy()) net::scanStart(); out = wifiJson(); }
+  else if (path == "/api/pair/start") {
+    String code = blesetup::startGrant();
+    out = "{\"code\":\"" + code + "\",\"url\":\"https://voltol.battlab.net/#pair=" + code + "\",\"left\":180}";
+  } else if (path == "/api/cloud") out = cloudJson();
+  else if (path == "/api/cloud/token") {
+    bool ok = cloud::setToken(arg("t").c_str());
+    if (!ok) code = 400;
+    out = cloudJson();
+  } else if (path == "/api/cloud/forget") { cloud::forget(); out = cloudJson(); }
   else if (path == "/api/profile") out = profJson();
   else if (path == "/api/profile/set") {
     int q = arg("p").toInt() & 1, f = arg("f").toInt();
@@ -641,14 +762,17 @@ void setup() {
   Serial1.begin(GPS_BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   web::begin(api, setClock);
 #ifdef VOLTOL_HEADLESS
+  cfg.wifi = 1;
+#endif
+  net::begin(cfg.wifi);
+#ifdef VOLTOL_HEADLESS
   ota::begin("s3", updateGuard);
 #else
   ota::begin("cyd35", updateGuard);
 #endif
-#ifdef VOLTOL_HEADLESS
-  cfg.wifi = 1;
-#endif
   web::enable(cfg.wifi);
+  cloud::begin(cloudPayload, cloudCmd);
+  blesetup::begin(!cloud::configured(), onBleSetup);  // new module: Bluetooth setup for 3 minutes
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
   vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
@@ -691,6 +815,12 @@ static void doActions(UiActions &a) {
 void loop() {
   uint32_t now = millis();
   web::loop();
+  LOCK();
+  net::loop();
+  blesetup::loop();
+  UNLOCK();
+  cloud::serialLoop();
+  if (restartAt && (int32_t)(now - restartAt) > 0) ESP.restart();
   ota::loop();
   {
     const ota::Status &o = ota::status();

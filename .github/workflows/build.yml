@@ -1,7 +1,7 @@
 name: Build firmware
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 permissions:
   contents: write
@@ -63,7 +63,8 @@ jobs:
         run: |
           git config user.name "voltol-ci"
           git config user.email "voltol-ci@users.noreply.github.com"
-          git checkout --orphan firmware-build
+          BR=firmware-build; [ "${GITHUB_REF_NAME}" = main ] || BR=firmware-dev   # dev builds never reach boards' OTA
+          git checkout --orphan $BR
           git read-tree --empty
           mkdir -p firmware/screens
           find out -maxdepth 1 -type f -exec cp {} firmware/ \;
@@ -72,4 +73,4 @@ jobs:
           echo "${{ job.status }} ${GITHUB_SHA::7}" > firmware/STATUS.txt
           git add -f firmware/
           git commit -qm "firmware for ${GITHUB_SHA::7} (${{ job.status }})"
-          git push -f origin firmware-build 2>&1 | tail -5
+          git push -f origin $BR 2>&1 | tail -5

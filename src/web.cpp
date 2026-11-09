@@ -9,6 +9,7 @@
 #include "logger.h"
 #include "web.h"
 #include "ota.h"
+#include "net.h"
 
 namespace web {
 static WebServer srv(80);
@@ -97,23 +98,14 @@ void begin(ApiFn api, TimeFn time) {
         else if (u.status == UPLOAD_FILE_ABORTED) Update.abort();
       });
 }
-// Hotspot on/off. The internet Wi-Fi (ota.cpp) can run at the same time; the
+// Hotspot on/off. The internet Wi-Fi (net.cpp) runs at the same time; the
 // web page is then also reachable from the home network.
 void enable(bool en) {
   if (en == on && srvStarted) return;
   on = en;
-  bool sta = ota::staConfigured();
-  if (en) {
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
-    snprintf(ssidBuf, sizeof ssidBuf, "VOLTOL-%02X%02X", mac[4], mac[5]);
-    WiFi.mode(sta ? WIFI_AP_STA : WIFI_AP);
-    WiFi.softAP(ssidBuf, AP_PASSWORD);
-  } else {
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(sta ? WIFI_STA : WIFI_OFF);
-  }
-  if ((en || sta) && !srvStarted) { srv.begin(); srvStarted = true; }
+  net::hotspot(en);  // net.cpp keeps hotspot + internet Wi-Fi working together
+  strlcpy(ssidBuf, net::apSsid(), sizeof ssidBuf);
+  if (!srvStarted) { srv.begin(); srvStarted = true; }
 }
 void loop() { if (srvStarted) srv.handleClient(); }
 const char *ssid() { return on ? ssidBuf : "off"; }

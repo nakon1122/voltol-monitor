@@ -84,9 +84,15 @@ svg text{font-family:inherit}
 <!-- SETUP -->
 <section id="t-setup" hidden>
   <div class="card c2" id="setList"></div>
-  <h3 data-i="Internet Wi-Fi (for updates)">Internet Wi-Fi (for updates)</h3><div class="card c2"><div class="row"><input id="wSsid" placeholder="Wi-Fi name" data-ip="Wi-Fi name" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px">
-    <input id="wPass" type="password" placeholder="Password" data-ip="Password" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px"><button class="btn" onclick="saveWifi()" data-i="SAVE">SAVE</button></div>
-    <div class="mut" id="wStat" style="font-size:13px;margin-top:8px"></div></div>
+  <h3 data-i="Internet Wi-Fi">Internet Wi-Fi</h3><div class="card c2">
+    <div class="mut" id="wStat" style="font-size:13px;margin-bottom:8px"></div>
+    <div id="wList"></div>
+    <div class="row" style="margin-top:8px"><select id="wScan" onchange="if(this.value)$('wSsid').value=this.value" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px"><option value="" data-i="Nearby networks">Nearby networks</option></select><button class="btn" id="wScanB" onclick="wifiScan()" data-i="SCAN">SCAN</button></div>
+    <div class="row" style="margin-top:8px"><input id="wSsid" maxlength="32" placeholder="Wi-Fi name" data-ip="Wi-Fi name" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px">
+    <input id="wPass" type="password" maxlength="64" placeholder="Password" data-ip="Password" style="flex:1;min-width:120px;background:#0F161E;border:1px solid #2A3640;color:#E8EDF2;border-radius:8px;padding:9px"><button class="btn y" onclick="saveWifi()" data-i="ADD">ADD</button></div>
+    <div class="mut" style="font-size:12px;margin-top:8px" data-i="Up to 8 networks (home, shop, phone hotspot). The module tries them in turn; this hotspot stays on.">Up to 8 networks (home, shop, phone hotspot). The module tries them in turn; this hotspot stays on.</div></div>
+  <h3 data-i="VOLTOL Cloud">VOLTOL Cloud</h3><div class="card c2"><div class="row"><div><b id="cStat"></b><div class="mut" id="cSub" style="font-size:13px;margin-top:4px"></div></div><span class="sp"></span><button class="btn y" onclick="pair()" data-i="PAIR">PAIR</button></div>
+    <div id="cPair" style="display:none;margin-top:10px;font-size:14px;line-height:1.6"></div></div>
   <h3 data-i="Firmware">Firmware</h3><div class="card c2"><div class="row"><div><b id="uVer"></b><div class="mut" id="uMsg" style="font-size:13px;margin-top:4px"></div></div><span class="sp"></span><button class="btn" onclick="otaDo('check')" data-i="CHECK">CHECK</button><button class="btn y" id="uInst" onclick="otaDo('install')" disabled>INSTALL</button></div>
     <div class="bar" id="uBarW" style="display:none"><i id="uBar" style="background:#FFC400"></i></div></div>
   <h3 data-i="Device">Device</h3><div class="card c2 sub" id="devInfo" style="font-size:14px;line-height:1.7"></div>
@@ -106,7 +112,7 @@ const WEB={"DASH":"หน้าปัด","Power":"กำลัง","Ctrl":"ก�
 "Faults":"ข้อผิดพลาด","Fault":"ข้อผิดพลาด","Files (CSV opens in Excel)":"ไฟล์ (CSV เปิดด้วย Excel ได้)","UNDO ALL":"คืนค่าทั้งหมด","Launch profile (against wheel spin)":"โปรไฟล์ออกตัว (ลดล้อฟรี)",
 "Lower throttle rise / start torque = less wheel spin. Apply loads the values into the editor; then press WRITE.":"ลด Rate of rise / Start torque = ล้อฟรีน้อยลง · ปุ่ม ใช้ค่า จะโหลดค่าเข้าตัวแก้ไข แล้วกด เขียนค่า",
 "Setting":"ค่า","Now":"ปัจจุบัน","Street":"ขับปกติ","Launch":"ออกตัว","Backups (saved automatically on every new read)":"ค่าสำรอง (บันทึกอัตโนมัติทุกครั้งที่อ่านค่าใหม่)",
-"Internet Wi-Fi (for updates)":"Wi-Fi อินเทอร์เน็ต (สำหรับอัปเดต)","Wi-Fi name":"ชื่อ Wi-Fi","Password":"รหัสผ่าน","SAVE":"บันทึก","CHECK":"ตรวจสอบ","Device":"อุปกรณ์","Firmware file update":"อัปเดตเฟิร์มแวร์จากไฟล์","UPLOAD":"อัปโหลด",
+"Internet Wi-Fi (for updates)":"Wi-Fi อินเทอร์เน็ต (สำหรับอัปเดต)","Internet Wi-Fi":"Wi-Fi อินเทอร์เน็ต","Nearby networks":"เครือข่ายใกล้เคียง","SCAN":"ค้นหา","ADD":"เพิ่ม","REMOVE":"ลบ","Up to 8 networks (home, shop, phone hotspot). The module tries them in turn; this hotspot stays on.":"บันทึกได้ 8 เครือข่าย (บ้าน ร้าน ฮอตสปอตมือถือ) โมดูลจะลองต่อทีละวง และฮอตสปอตของโมดูลยังเปิดอยู่ตลอด","Not connected - trying saved networks (paused while a phone uses this hotspot)":"ยังไม่ได้ต่อ - กำลังลองเครือข่ายที่บันทึกไว้ (หยุดลองชั่วคราวระหว่างมีมือถือต่อฮอตสปอตนี้)","No internet Wi-Fi saved yet":"ยังไม่ได้บันทึก Wi-Fi อินเทอร์เน็ต","Remove %s?":"ลบ %s ?","VOLTOL Cloud":"VOLTOL Cloud","PAIR":"จับคู่","Online":"ออนไลน์","Paired · waiting for internet":"จับคู่แล้ว · รออินเทอร์เน็ต","Not paired":"ยังไม่จับคู่","Bluetooth setup open · %d s":"เปิดจับคู่ Bluetooth · เหลือ %d วินาที","Last upload: HTTP %d":"ส่งข้อมูลล่าสุด: HTTP %d","Press PAIR, then open the link on your phone":"กด จับคู่ แล้วเปิดลิงก์บนมือถือ","Open this link on your phone (signed in to BATTLAB), then choose VOLTOL Setup over Bluetooth:":"เปิดลิงก์นี้บนมือถือ (ล็อกอิน BATTLAB ไว้) แล้วเลือก VOLTOL Setup ทาง Bluetooth:","Valid for 3 minutes":"ใช้ได้ 3 นาที","Wi-Fi name":"ชื่อ Wi-Fi","Password":"รหัสผ่าน","SAVE":"บันทึก","CHECK":"ตรวจสอบ","Device":"อุปกรณ์","Firmware file update":"อัปเดตเฟิร์มแวร์จากไฟล์","UPLOAD":"อัปโหลด",
 "Use the *_APP_UPDATE.bin file. Settings, logs and backups are kept.":"ใช้ไฟล์ *_APP_UPDATE.bin · ค่าตั้ง บันทึก และค่าสำรองยังอยู่ครบ","Write parameters to the controller":"เขียนค่าพารามิเตอร์ลงกล่อง",
 "OFFLINE":"ออฟไลน์","GPS":"GPS","rpm":"รอบ","GPS %d sats":"GPS %d ดวง","GPS only":"GPS อย่างเดียว","waiting for controller":"รอสัญญาณจากกล่อง","FAULT: %s":"ผิดปกติ: %s",
 "%.0f Hz · %d baud":"%.0f Hz · %d baud","ARM":"ARM","Press ARM, then launch from a standstill":"กด ARM แล้วออกตัวจากจุดหยุดนิ่ง","GPS: hold still for 1 s":"GPS: จอดนิ่ง 1 วินาที",
@@ -234,19 +240,32 @@ $('pWrite').onclick=()=>{const ch=P.fields.filter(f=>f.r!=f.ro);$('mBody').inner
 $('mGo').onclick=async()=>{$('modal').style.display='none';const r=await fetch('/api/params/write?confirm=yes');const j=await r.json();if(j.error){alert(tm(j.error));return}renderParams(j);pollParams()};
 // ---------- setup
 const SL=[['dash','Screen dashboard',['A Sport Arc','B Digital Race','C Twin Gauge']],['speedSrc','Speed source',['RPM','GPS','AUTO']],['logRate','Log rate',['MAX','10 Hz','5 Hz','2 Hz','1 Hz']],['cells','Battery cells (S)'],['cellEmptyMv','Cell empty (mV)',null,50],['cellFullMv','Cell full (mV)',null,50],['maxKmh','Gauge max km/h',null,10],['maxAmp','Gauge max A',null,50],['backlight','Screen backlight (1-5)'],['wifi','Wi-Fi hotspot',['OFF','ON']],['tzHours','Time zone (UTC+)'],['rollout','Drag rollout',['OFF (0 ft)','1 ft (strip)']],['gpsRate','GPS rate',['10 Hz','25 Hz (M10)']],['tyreW','Tyre width (mm)',null,5],['tyreA','Tyre aspect (%)',null,5],['tyreR','Rim (inch)'],['wheelCorr','Wheel correction (0.1 %)'],['ratioX100','Gear ratio x100',null,5],['maxG10','Max traction (wheel spin)',null,1,v=>(v/10).toFixed(1)+' g'],['advanced','Advanced parameters',['OFF','ON']]];
-async function settings(){ota();const s=await api('/api/settings');
+async function settings(){ota();wifi();cloudSt();const s=await api('/api/settings');
   $('setList').innerHTML=SL.filter(x=>!(s.headless&&['dash','backlight','wifi'].includes(x[0]))).map(([k,n,opt,st,fmt])=>`<div class="field"><div class="n">${t(n)}</div><div class="val">${opt?t(opt[s[k]]):fmt?fmt(s[k]):s[k]}</div><div class="step"><button onclick="setv('${k}',${s[k]-(st||1)})">−</button><button onclick="setv('${k}',${s[k]+(st||1)})">+</button></div></div>`).join('')+
    `<div class="field"><div class="n">${t('Wheel circumference')}</div><div class="val ye">${s.circMm.toFixed(0)} mm · ${f1(s.kmhAt1000)} ${t('km/h @1000 rpm')}</div></div>`;
   KA1=s.kmhAt1000/1000;
   $('devInfo').innerHTML=`${L.fw||''}<br>${t('Controller: ')}${L.linked?`<span class="gr">${t('connected')}</span> · `+L.baud+' baud · '+L.hz.toFixed(1)+' Hz':`<span class="re">${t('no data')}</span>`}<br>${t('GPS: ')}${L.gps&&L.gps.seen?(L.gps.ubx?'u-blox ':'NMEA ')+t(L.gps.fix?'fix':'no fix')+' · '+tf('%d sats',L.gps.sats)+' · '+L.gps.hz.toFixed(0)+' Hz':t('not connected')}<br>${t('Log storage: ')}${t(L.sd?'SD card':'internal')} · ${tf('%d KB free',L.freeKB)}`}
 function setv(k,v){api('/api/set',{k,v}).then(()=>settings())}
 async function ota(){try{const o=await api('/api/ota');
-  $('wStat').innerHTML=o.netOn?(o.connected?`<span class="gr">${tf('Connected to %s · %s',o.ssid,o.ip)}</span>`:tf('Connecting to %s...',o.ssid)):t('Not set. The board joins this network to download updates; its own hotspot stays on.');
   $('uVer').textContent=tf('Installed %s',o.version)+(o.latest?tf(' · latest %s',o.latest):'');$('uMsg').textContent=(o.rolledBack?t('Last update did not start - previous version restored. '):'')+tm(o.msg);$('uMsg').className=o.state==4||o.rolledBack?'re':o.available?'ye':'mut';
   $('uInst').disabled=!o.available||o.state==2;$('uInst').textContent=o.available?tf('INSTALL %s',o.latest):t('INSTALL');
   $('uBarW').style.display=o.state==2?'block':'none';$('uBar').style.width=o.progress+'%';if(o.state==1||o.state==2)setTimeout(ota,800)}catch(e){}}
 async function otaDo(c){const r=await fetch('/api/ota/'+c);const j=await r.json();if(j.error)alert(tm(j.error));setTimeout(ota,300)}
-async function saveWifi(){await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({ssid:$('wSsid').value,pass:$('wPass').value})});$('wPass').value='';setTimeout(ota,1500)}
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function wifi(){try{const w=await api('/api/wifi/list');
+  $('wStat').innerHTML=w.online?`<span class="gr">${tf('Connected to %s · %s',esc(w.ssid),w.ip)}</span> · ${w.rssi} dBm`:(w.saved.length?t('Not connected - trying saved networks (paused while a phone uses this hotspot)'):t('No internet Wi-Fi saved yet'));
+  $('wList').innerHTML=w.saved.map(n=>`<div class="row" style="padding:6px 0;border-bottom:1px solid #1E2A36"><span style="flex:1">${n.on?'<b class="gr">● </b>':''}${esc(n.s)}</span><button class="btn" onclick="wifiDel(${esc(JSON.stringify(n.s))})">${t('REMOVE')}</button></div>`).join('');
+  const sel=$('wScan');if(w.scan.length){const cur=sel.value;sel.innerHTML=`<option value="">${t('Nearby networks')}</option>`+w.scan.map(n=>`<option value="${esc(n.s)}">${n.l?'🔒 ':''}${esc(n.s)} · ${n.r} dBm</option>`).join('');sel.value=cur}
+  $('wScanB').disabled=w.scanBusy;if(w.scanBusy)setTimeout(wifi,800)}catch(e){}}
+async function wifiScan(){await api('/api/wifi/scan');setTimeout(wifi,600)}
+async function wifiDel(n){if(!confirm(tf('Remove %s?',n)))return;await api('/api/wifi/remove',{ssid:n});wifi()}
+async function saveWifi(){const ssid=$('wSsid').value.trim();if(!ssid)return;await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({ssid,pass:$('wPass').value})});$('wPass').value='';$('wSsid').value='';setTimeout(wifi,800);setTimeout(wifi,6000)}
+async function cloudSt(){try{const c=await api('/api/cloud');
+  $('cStat').innerHTML=c.cloud.online?`<span class="gr">${t('Online')}</span>`:c.cloud.configured?t('Paired · waiting for internet'):`<span class="ye">${t('Not paired')}</span>`;
+  $('cSub').textContent=c.ble!=='idle'?tf('Bluetooth setup open · %d s',c.bleLeft):(c.cloud.configured?tf('Last upload: HTTP %d',c.cloud.http):t('Press PAIR, then open the link on your phone'))}catch(e){}}
+async function pair(){const r=await api('/api/pair/start');const box=$('cPair');box.style.display='block';
+  box.innerHTML=`${t('Open this link on your phone (signed in to BATTLAB), then choose VOLTOL Setup over Bluetooth:')}<br><a href="${r.url}" target="_blank" style="color:#FFC400;word-break:break-all">${r.url}</a><br><span class="mut">${t('Valid for 3 minutes')}</span>`;cloudSt()}
+setInterval(()=>{if(!$('t-setup').hidden){wifi();cloudSt()}},4000);
 api("/api/settings").then(s=>{KA1=s.kmhAt1000/1000}).catch(()=>{});
 live();
 </script>

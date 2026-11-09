@@ -1,0 +1,20 @@
+// "VOLTOL Setup" Bluetooth pairing with voltol.battlab.net (same protocol as v1.6.x):
+// the web page sends the home Wi-Fi + the module's cloud token, encrypted.
+//  * boot-ready: a module without a cloud token accepts setup for 3 minutes after
+//    power-on (key agreed with ECDH P-256, you are next to the bike).
+//  * ready: "PAIR" on the module's web page makes a one-time code (link
+//    voltol.battlab.net/#pair=CODE), valid 3 minutes.
+// Bluetooth is switched off again after the window to keep memory for Wi-Fi/TLS.
+#pragma once
+#include <Arduino.h>
+
+namespace blesetup {
+// Called when a valid setup arrived (already decrypted and checked).
+typedef void (*DoneFn)(const char *ssid, const char *pass, const char *token);
+void begin(bool bootWindow, DoneFn done);
+String startGrant();   // returns the 32-hex one-time code
+void loop();
+bool active();
+const char *state();   // idle / boot-ready / ready / accepted / ...
+int secondsLeft();
+}  // namespace blesetup
