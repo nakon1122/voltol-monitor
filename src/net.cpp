@@ -34,7 +34,8 @@ static void persist() {
 static void load() {
   Preferences p;
   p.begin("voltol-net", true);
-  int c = p.getUChar("count", 0);
+  // v1.6.x saved s0..s7 without a count: read every slot when "count" is missing
+  int c = p.isKey("count") ? p.getUChar("count", 0) : MAX_NETS;
   if (c > MAX_NETS) c = MAX_NETS;
   n = 0;
   for (int i = 0; i < c; i++) {
