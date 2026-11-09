@@ -75,7 +75,7 @@ static void applyMode() {
   // Bluetooth runs: Wi-Fi + BLE coexistence needs modem sleep, with it off the
   // radio driver aborts ("Should enable WiFi modem sleep when both WiFi and
   // Bluetooth are enabled") and the board reboots (1.7.0/1.7.1 BLE pairing bug)
-  if (m != WIFI_OFF) WiFi.setSleep(btOn);
+  if (m != WIFI_OFF) { WiFi.setSleep(btOn); WiFi.setTxPower(WIFI_POWER_19_5dBm); }  // full power: range over current draw
 }
 
 void hotspot(bool on) {
@@ -88,6 +88,7 @@ void hotspot(bool on) {
     snprintf(apName, sizeof apName, "VOLTOL-%02X%02X", mac[4], mac[5]);
     // channel 1 at first; once the internet Wi-Fi joins, the radio (and the hotspot) follow its channel
     WiFi.softAP(apName, AP_PASSWORD, 1, 0, 4);
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
   } else {
     WiFi.softAPdisconnect(true);
   }

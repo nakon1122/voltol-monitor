@@ -541,6 +541,22 @@ static void jstr(String &o, const char *s) {
   for (const char *p = s; *p; p++) { if (*p == '"' || *p == '\\') o += '\\'; if ((uint8_t)*p >= 0x20) o += *p; }
   o += '"';
 }
+// 0.2 s samples for the cloud page: [uptime_ms, rpm, km/h, V, A], sent in batches
+// with every upload (2 per second while riding) so the dashboard moves smoothly.
+static const int FR_N = 10;
+static float frBuf[FR_N][5];
+static uint32_t frT[FR_N];  // uptime kept as integer (a float loses ms after 4.6 h)
+static int frHead = 0, frCount = 0;
+static uint32_t frLast = 0;
+static void frameSample(uint32_t now) {  // under LOCK
+  if (now - frLast < 200) return;
+  frLast = now;
+  bool ctl = S.linked;
+  float *f = frBuf[frHead];
+  frT[frHead] = now; f[0] = 0; f[1] = ctl ? S.live.rpm : 0; f[2] = S.speedOk ? S.kmh : 0; f[3] = ctl ? S.live.volt : 0; f[4] = ctl ? S.live.amp : 0;
+  frHead = (frHead + 1) % FR_N;
+  if (frCount < FR_N) frCount++;
+}
 // Same fields as v1.6.x (the web dashboard reads them) + Wi-Fi list for remote control.
 static void cloudPayload(String &o, int &rpm, bool &moving) {
   LOCK();
@@ -582,7 +598,17 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
     snprintf(sp, sizeof sp, "%s{\"done\":%s,\"t\":%.3f,\"v\":%.1f,\"a\":%.0f}", i ? "," : "", x.done ? "true" : "false", x.t, x.trapKmh, x.peakA);
     o += sp;
   }
-  o += "]}}";
+  o += "]}";
+  o += ",\"frames\":[";
+  for (int i = 0; i < frCount; i++) {
+    int k = (frHead - frCount + i + FR_N) % FR_N;
+    const float *f = frBuf[k];
+    char fr[72];
+    snprintf(fr, sizeof fr, "%s[%lu,%d,%.1f,%.1f,%.1f]", i ? "," : "", (unsigned long)frT[k], (int)f[1], f[2], f[3], f[4]);
+    o += fr;
+  }
+  frCount = 0;
+  o += "]}";
   UNLOCK();
 }
 static String cloudCmd(const String &cmd, const String &args, bool &ok) {
@@ -626,7 +652,8 @@ static String wifiJson() {
 static String cloudJson() {
   String o = "{\"cloud\":" + cloud::statusJson() + ",\"ble\":";
   jstr(o, blesetup::state());
-  o += ",\"bleLeft\":" + String(blesetup::secondsLeft()) + "}";
+  o += ",\"bleLeft\":" + String(blesetup::secondsLeft());
+  o += String(",\"bleOn\":") + (blesetup::enabled() ? "true" : "false") + "}";
   return o;
 }
 static void onBleSetup(const char *ssid, const char *pass, const char *token) {
@@ -687,6 +714,7 @@ static String api(const String &path, const std::function<String(const char *)> 
     String code = blesetup::startGrant();
     out = "{\"code\":\"" + code + "\",\"url\":\"https://voltol.battlab.net/#pair=" + code + "\",\"left\":180}";
   } else if (path == "/api/cloud") out = cloudJson();
+  else if (path == "/api/ble") { blesetup::setEnabled(arg("on") == "1"); out = cloudJson(); }
   else if (path == "/api/cloud/token") {
     bool ok = cloud::setToken(arg("t").c_str());
     if (!ok) code = 400;
@@ -772,7 +800,7 @@ void setup() {
 #endif
   web::enable(cfg.wifi);
   cloud::begin(cloudPayload, cloudCmd);
-  blesetup::begin(!cloud::configured(), onBleSetup);  // new module: Bluetooth setup for 3 minutes
+  blesetup::begin(!cloud::configured(), onBleSetup);  // Bluetooth on all the time (setting) / 3-minute window for a new module
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
   vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
@@ -818,6 +846,7 @@ void loop() {
   LOCK();
   net::loop();
   blesetup::loop();
+  frameSample(now);
   UNLOCK();
   cloud::serialLoop();
   if (restartAt && (int32_t)(now - restartAt) > 0) ESP.restart();

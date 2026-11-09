@@ -1,6 +1,6 @@
 // Board wiring for the ESP32-3248S035 ("CYD 3.5", ST7796 + XPT2046).
 #pragma once
-#define VOLTOL_FW "1.7.2"
+#define VOLTOL_FW "1.7.3"
 
 #ifdef VOLTOL_HEADLESS
 // ---- ESP32-S3 DevKitC-1 (no screen, everything on the web page) ----

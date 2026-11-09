@@ -5,6 +5,8 @@
 #include <mbedtls/ecdh.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/gcm.h>
+#include <Preferences.h>
+#include <esp_bt.h>
 #include "net.h"
 
 namespace blesetup {
@@ -17,7 +19,6 @@ static const uint32_t WINDOW_MS = 180000;
 
 static DoneFn doneFn = nullptr;
 static bool on = false, physical = false;
-static uint32_t until = 0;
 static char st[16] = "idle";
 static uint8_t grantKey[16];
 static NimBLECharacteristic *cStatus = nullptr, *cPub = nullptr, *cScan = nullptr;
@@ -32,6 +33,12 @@ static bool haveKey = false;
 // result handed to loop()
 static char rSsid[33], rPass[65], rTok[65];
 static volatile bool resultReady = false;
+static bool always = true;      // setting: Bluetooth stays on all the time (S3)
+static bool needSetup = false;  // module has no cloud token yet
+static bool grantOn = false;    // one-time code from the module page is valid
+static uint32_t windowEnd = 0;  // 0 = no running window
+static uint32_t lastAdvCheck = 0;
+static uint8_t pubRaw[65];
 
 static int rng(void *, unsigned char *out, size_t n) { esp_fill_random(out, n); return 0; }
 static void setState(const char *s) {
@@ -70,8 +77,9 @@ static void handlePacket() {
   if (pktLen > sizeof pkt) { setState("invalid-data"); return; }
   uint8_t key[16];
   size_t off = 0;
+  if (!physical && !grantOn) { setState("invalid-code"); return; }  // locked: needs a code from the module page
   if (physical) {
-    if (!haveKey || pktLen < 65 + 12 + 16) { setState("invalid-data"); return; }
+    if (!needSetup || !haveKey || pktLen < 65 + 12 + 16) { setState("invalid-data"); return; }
     mbedtls_ecp_point peer;
     mbedtls_mpi z;
     mbedtls_ecp_point_init(&peer);
@@ -119,12 +127,27 @@ static void fillScan() {
   cScan->setValue(buf, pos);
 }
 
+
+static void setPowerMax() {
+  // strongest radio the chip allows: range/stability over current draw
+#if CONFIG_IDF_TARGET_ESP32S3
+  const esp_power_level_t lvl = ESP_PWR_LVL_P21;
+#else
+  const esp_power_level_t lvl = ESP_PWR_LVL_P9;
+#endif
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, lvl);
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, lvl);
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, lvl);
+  for (int h = 0; h < 3; h++) esp_ble_tx_power_set((esp_ble_power_type_t)(ESP_BLE_PWR_TYPE_CONN_HDL0 + h), lvl);
+}
+
 static void start() {
   if (on) return;
   net::btCoex(true);  // modem sleep on first, or the radio driver aborts
   NimBLEDevice::init("VOLTOL Setup");
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  setPowerMax();
   NimBLEServer *srv = NimBLEDevice::createServer();
+  srv->advertiseOnDisconnect(true);
   NimBLEService *svc = srv->createService(SVC);
   NimBLECharacteristic *w = svc->createCharacteristic(CH_WRITE, NIMBLE_PROPERTY::WRITE);
   w->setCallbacks(&writeCb);
@@ -139,6 +162,11 @@ static void start() {
   adv->setScanResponse(true);
   adv->start();
   on = true;
+  if (haveKey) cPub->setValue(pubRaw, 65);
+  setState(st);
+}
+static void freeKey() {
+  if (haveKey) { mbedtls_ecp_group_free(&grp); mbedtls_mpi_free(&priv); mbedtls_ecp_point_free(&pub); haveKey = false; }
 }
 static void stop() {
   if (!on) return;
@@ -146,34 +174,69 @@ static void stop() {
   cStatus = cPub = cScan = nullptr;
   on = false;
   net::btCoex(false);
-  if (haveKey) { mbedtls_ecp_group_free(&grp); mbedtls_mpi_free(&priv); mbedtls_ecp_point_free(&pub); haveKey = false; }
-  strlcpy(st, "idle", sizeof st);
 }
-
-void begin(bool bootWindow, DoneFn done) {
-  doneFn = done;
-  if (!bootWindow) return;
+static bool makeKey() {
+  if (haveKey) return true;
   mbedtls_ecp_group_init(&grp);
   mbedtls_mpi_init(&priv);
   mbedtls_ecp_point_init(&pub);
-  uint8_t q[65];
   size_t ql = 0;
   haveKey = mbedtls_ecp_group_load(&grp, MBEDTLS_ECP_DP_SECP256R1) == 0 &&
             mbedtls_ecp_gen_keypair(&grp, &priv, &pub, rng, nullptr) == 0 &&
-            mbedtls_ecp_point_write_binary(&grp, &pub, MBEDTLS_ECP_PF_UNCOMPRESSED, &ql, q, sizeof q) == 0 && ql == 65;
-  if (!haveKey) return;
-  start();
-  cPub->setValue(q, 65);
-  physical = true;
-  until = millis() + WINDOW_MS;
-  setState("boot-ready");
+            mbedtls_ecp_point_write_binary(&grp, &pub, MBEDTLS_ECP_PF_UNCOMPRESSED, &ql, pubRaw, sizeof pubRaw) == 0 && ql == 65;
+  if (!haveKey) { mbedtls_ecp_group_free(&grp); mbedtls_mpi_free(&priv); mbedtls_ecp_point_free(&pub); }
+  return haveKey;
+}
+// resting state when no window is running
+static void rest() {
+  grantOn = false;
+  windowEnd = 0;
+  if (needSetup && makeKey()) {
+    physical = true;
+    if (!on && always) start();
+    if (cPub) cPub->setValue(pubRaw, 65);
+    setState("boot-ready");
+    if (!always) windowEnd = millis() + WINDOW_MS;  // setting off: old 3-minute window
+  } else {
+    physical = false;
+    freeKey();
+    if (always) { if (!on) start(); setState("locked"); }
+    else { stop(); strlcpy(st, "idle", sizeof st); }
+  }
 }
 
+static bool loadSetting() {
+  Preferences p;
+  p.begin("voltol-ble", true);
+  bool v = p.getBool("on", true);
+  p.end();
+  return v;
+}
+
+void begin(bool unconfigured, DoneFn done) {
+  doneFn = done;
+  always = loadSetting();
+  needSetup = unconfigured;
+  if (!needSetup && !always) return;  // nothing to do: stays off
+  rest();
+}
+
+void setEnabled(bool v) {
+  Preferences p;
+  p.begin("voltol-ble", false);
+  p.putBool("on", v);
+  p.end();
+  always = v;
+  if (!windowEnd || v) rest();  // a running pairing window is left to finish
+}
+bool enabled() { return always; }
+
 String startGrant() {
-  start();
   esp_fill_random(grantKey, sizeof grantKey);
   physical = false;
-  until = millis() + WINDOW_MS;
+  grantOn = true;
+  if (!on) start();
+  windowEnd = millis() + WINDOW_MS;
   setState("ready");
   char hex[33];
   for (int i = 0; i < 16; i++) sprintf(hex + i * 2, "%02x", grantKey[i]);
@@ -187,8 +250,12 @@ void loop() {
     resultReady = false;
     if (doneFn) doneFn(rSsid, rPass, rTok);
     memset(rPass, 0, sizeof rPass);
+    memset(grantKey, 0, sizeof grantKey);
+    needSetup = false;
+    grantOn = false;
+    physical = false;
     setState("accepted");
-    until = millis() + 15000;  // let the web page read "accepted", then switch Bluetooth off
+    windowEnd = millis() + 15000;  // let the web page read "accepted"
   }
   if (scanReq) {
     scanReq = false;
@@ -198,20 +265,30 @@ void loop() {
     cScan->setValue(&busy, 1);
   }
   if (scanning && !net::scanBusy()) { scanning = false; fillScan(); }
-  if ((int32_t)(millis() - until) > 0) {
-    if (strcmp(st, "accepted") && on) setState("expired");
-    stop();
+  if (windowEnd && (int32_t)(millis() - windowEnd) > 0) {
+    bool wasGrant = grantOn;
+    if (!always && !wasGrant && strcmp(st, "accepted")) { setState("expired"); stop(); windowEnd = 0; freeKey(); return; }
+    rest();
+  }
+  // keep advertising: restart it if a phone dropped without the stack doing so
+  if (on && millis() - lastAdvCheck > 3000) {
+    lastAdvCheck = millis();
+    NimBLEServer *srv = NimBLEDevice::getServer();
+    NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
+    if (srv && adv && srv->getConnectedCount() == 0 && !adv->isAdvertising()) adv->start();
   }
 }
 bool active() { return on; }
 const char *state() { return st; }
-int secondsLeft() { return on ? (int)((int32_t)(until - millis()) / 1000) : 0; }
+int secondsLeft() { return on && windowEnd ? (int)((int32_t)(windowEnd - millis()) / 1000) : 0; }
 }  // namespace blesetup
 #else
 // CYD 3.5: no room for Bluetooth next to the screen fonts. Pair with the
 // module web page (cloud token) or USB serial instead.
 namespace blesetup {
 void begin(bool, DoneFn) {}
+void setEnabled(bool) {}
+bool enabled() { return false; }
 String startGrant() { return ""; }
 void loop() {}
 bool active() { return false; }
