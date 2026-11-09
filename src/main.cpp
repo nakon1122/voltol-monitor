@@ -543,6 +543,7 @@ static void jstr(String &o, const char *s) {
 }
 // 0.2 s samples for the cloud page: [uptime_ms, rpm, km/h, V, A], sent in batches
 // with every upload (2 per second while riding) so the dashboard moves smoothly.
+static uint32_t cloudScanAt = 0;  // Wi-Fi scan asked from the cloud page: results go up for 2 minutes
 static const int FR_N = 10;
 static float frBuf[FR_N][5];
 static uint32_t frT[FR_N];  // uptime kept as integer (a float loses ms after 4.6 h)
@@ -608,7 +609,13 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
     o += fr;
   }
   frCount = 0;
-  o += "]}";
+  o += "]";
+  if (cloudScanAt && millis() - cloudScanAt < 120000) {
+    bool busy = net::scanBusy();
+    o += String(",\"wifi_scan_busy\":") + (busy ? "true" : "false");
+    if (!busy) o += ",\"wifi_scan\":" + net::scanJson();
+  }
+  o += "}";
   UNLOCK();
 }
 static String cloudCmd(const String &cmd, const String &args, bool &ok) {
@@ -626,6 +633,10 @@ static String cloudCmd(const String &cmd, const String &args, bool &ok) {
     const char *ss = a["ssid"] | "";
     ok = net::remove(ss);
     out = ok ? String("removed ") + ss : "not saved on the module";
+  } else if (cmd == "wifi_scan") {
+    if (!net::scanBusy()) net::scanStart();
+    cloudScanAt = millis();
+    out = "scanning";
   } else if (cmd == "ota_check") { ota::check(); out = "checking"; }
   else if (cmd == "ota_install") {
     const char *why = updateGuard();
