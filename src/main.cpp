@@ -1,6 +1,7 @@
 // VOLTOL Monitor - dashboard, logger, 402 m timer and parameter tuner for
 // VOTOL EM-series controllers on the ESP32-3248S035 (CYD 3.5").
 #include <Arduino.h>
+#include <ArduinoJson.h>  // before i18n.h: its T() macro clashes with template names
 #include <Preferences.h>
 #include <esp_heap_caps.h>
 #include <sys/time.h>
@@ -18,7 +19,6 @@
 #include "net.h"
 #include "cloud.h"
 #include "blesetup.h"
-#include <ArduinoJson.h>
 
 static UiState S;
 static Settings cfg;
