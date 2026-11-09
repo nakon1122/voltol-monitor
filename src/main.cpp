@@ -549,6 +549,21 @@ static float frBuf[FR_N][5];
 static uint32_t frT[FR_N];  // uptime kept as integer (a float loses ms after 4.6 h)
 static int frHead = 0, frCount = 0;
 static uint32_t frLast = 0;
+// RPM / A / V at the moment each drag split is crossed (cloud split table)
+static float spRpm[ride::SPLITS], spAmp[ride::SPLITS], spVolt[ride::SPLITS];
+static bool spSeen[ride::SPLITS];
+static void splitSample() {  // under LOCK
+  // a new run clears the result: forget the captured values too
+  if (!drag.r.s[0].done) for (int i = 0; i < ride::SPLITS; i++) spSeen[i] = false;
+  bool ctl = S.linked;
+  for (int i = 0; i < ride::SPLITS; i++) {
+    if (!drag.r.s[i].done || spSeen[i]) continue;
+    spSeen[i] = true;
+    spRpm[i] = ctl ? S.live.rpm : NAN;
+    spAmp[i] = ctl ? S.live.amp : NAN;
+    spVolt[i] = ctl ? S.live.volt : NAN;
+  }
+}
 static void frameSample(uint32_t now) {  // under LOCK
   if (now - frLast < 200) return;
   frLast = now;
@@ -590,13 +605,18 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
   o += ",\"ip\":"; jstr(o, net::ip());
   char d[200];
   snprintf(d, sizeof d, ",\"drag\":{\"state\":\"%s\",\"elapsed_s\":%.3f,\"distance_m\":%.1f,\"run_id\":\"%lu\",\"splits\":",
-           DRAG_STATE[drag.state], drag.elapsed(millis() / 1000.0), drag.distance(), (unsigned long)dragRunId);
+           DRAG_STATE[drag.state], drag.elapsed(millis() / 1000.0),
+           drag.state == ride::DragTimer::DONE && drag.r.s[ride::SPLITS - 1].done ? 402.336 : drag.distance(), (unsigned long)dragRunId);
   o += d;
   o += "[";
   for (int i = 0; i < ride::SPLITS; i++) {
     const ride::Split &x = drag.r.s[i];
-    char sp[96];
-    snprintf(sp, sizeof sp, "%s{\"done\":%s,\"t\":%.3f,\"v\":%.1f,\"a\":%.0f}", i ? "," : "", x.done ? "true" : "false", x.t, x.trapKmh, x.peakA);
+    char sp[180];
+    int n = snprintf(sp, sizeof sp, "%s{\"done\":%s,\"t\":%.3f,\"v\":%.1f,\"a\":%.0f,\"peak_a\":%.0f", i ? "," : "", x.done ? "true" : "false", x.t, x.trapKmh, x.peakA, x.peakA);
+    if (x.done && spSeen[i] && !isnan(spRpm[i]))
+      snprintf(sp + n, sizeof sp - n, ",\"rpm\":%.0f,\"amp\":%.1f,\"voltage\":%.1f}", spRpm[i], spAmp[i], spVolt[i]);
+    else
+      snprintf(sp + n, sizeof sp - n, "}");
     o += sp;
   }
   o += "]}";
@@ -857,6 +877,7 @@ void loop() {
   LOCK();
   net::loop();
   blesetup::loop();
+  splitSample();
   frameSample(now);
   UNLOCK();
   cloud::serialLoop();
