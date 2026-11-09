@@ -8,6 +8,8 @@ namespace net {
 static Saved nets[MAX_NETS];
 static int n = 0;
 static bool apOn = false;
+static volatile int scanN = -1;     // scan results ready (-1 none yet)
+static volatile bool scanRun = false;
 static char apName[24] = "";
 static int tryIdx = -1;            // network being tried (-1 none)
 static uint32_t lastTry = 0, tryStart = 0;
@@ -66,6 +68,7 @@ static void load() {
 
 static void applyMode() {
   wifi_mode_t m = apOn ? (n ? WIFI_AP_STA : WIFI_AP) : (n ? WIFI_STA : WIFI_OFF);
+  if (scanRun && m == WIFI_AP) m = WIFI_AP_STA;
   if (WiFi.getMode() != m) WiFi.mode(m);
   if (m != WIFI_OFF) WiFi.setSleep(false);  // power save drops hotspot clients in AP+STA
 }
@@ -132,7 +135,7 @@ void loop() {
     // next attempt only when nobody is using the hotspot (connecting scans all
     // channels and would cut the phone that is on the module's web page);
     // with a phone connected, one quiet try every 5 minutes
-    if (n && tryIdx < 0 && now - lastTry > RETRY_MS && (apClients() == 0 || now - lastTry > 300000)) {
+    if (n && tryIdx < 0 && !scanRun && now - lastTry > RETRY_MS && (apClients() == 0 || now - lastTry > 300000)) {
       static int next = 0;
       startTry(next % n);
       next++;
@@ -179,21 +182,44 @@ int rssi() { return online() ? curRssi : 0; }
 int channel() { return curCh; }
 
 // ---------------------------------------------------------------- scan ----
-static int scanN = -1;  // -1 never, -2 busy
+// Arduino-ESP32 2.0.x scanComplete() gives up after max_ms_per_chan*20 ms and
+// then reports FAILED for ever - with the hotspot on, the radio keeps going back
+// to the hotspot channel so a scan takes longer than that and the list stayed
+// empty (1.7.0 bug). We follow the SCAN_DONE event ourselves instead and only
+// read the results Arduino stored (WiFi.SSID(i) ...).
+static uint32_t scanT0 = 0;
+static bool evHooked = false;
+static void onScanDone(arduino_event_id_t, arduino_event_info_t info) {
+  scanN = info.wifi_scan_done.status == 0 ? info.wifi_scan_done.number : 0;
+  scanRun = false;
+}
 void scanStart() {
-  if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) return;
-  WiFi.scanDelete();
-  WiFi.scanNetworks(true, false, false, 120);  // async, ~1.6 s, 120 ms per channel
-  scanN = -2;
+  if (scanBusy()) return;
+  if (!evHooked) { WiFi.onEvent(onScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE); evHooked = true; }
+  // a scan needs the station interface, and the driver refuses to scan while
+  // the station is in the middle of joining a network: stop that try first
+  if (!(WiFi.getMode() & WIFI_STA)) WiFi.enableSTA(true);
+  if (tryIdx >= 0 && WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect(false, false);
+    tryIdx = -1;
+    lastTry = millis();
+  }
+  scanRun = true;
+  scanT0 = millis();
+  int r = WiFi.scanNetworks(true, false, false, 150);
+  if (r == WIFI_SCAN_FAILED) {  // driver busy: one retry after a short pause
+    delay(200);
+    r = WiFi.scanNetworks(true, false, false, 150);
+    if (r == WIFI_SCAN_FAILED) scanRun = false;
+  }
 }
 bool scanBusy() {
-  int r = WiFi.scanComplete();
-  if (r >= 0) scanN = r;
-  return r == WIFI_SCAN_RUNNING;
+  if (scanRun && millis() - scanT0 > 12000) scanRun = false;  // event lost
+  return scanRun;
 }
-int scanCount() { scanBusy(); return scanN < 0 ? 0 : scanN; }
+int scanCount() { return scanN < 0 ? 0 : scanN; }
 bool scanItem(int i, String &s, int &r, bool &lock) {
-  if (i < 0 || i >= scanCount()) return false;
+  if (i < 0 || i >= scanCount() || scanRun) return false;
   s = WiFi.SSID(i);
   r = WiFi.RSSI(i);
   lock = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
