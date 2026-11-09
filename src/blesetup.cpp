@@ -1,4 +1,5 @@
 #include "blesetup.h"
+#ifndef VOLTOL_NO_BLE
 #include <NimBLEDevice.h>
 #include <esp_random.h>
 #include <mbedtls/ecdh.h>
@@ -204,3 +205,15 @@ bool active() { return on; }
 const char *state() { return st; }
 int secondsLeft() { return on ? (int)((int32_t)(until - millis()) / 1000) : 0; }
 }  // namespace blesetup
+#else
+// CYD 3.5: no room for Bluetooth next to the screen fonts. Pair with the
+// module web page (cloud token) or USB serial instead.
+namespace blesetup {
+void begin(bool, DoneFn) {}
+String startGrant() { return ""; }
+void loop() {}
+bool active() { return false; }
+const char *state() { return "unsupported"; }
+int secondsLeft() { return 0; }
+}  // namespace blesetup
+#endif
