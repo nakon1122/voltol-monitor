@@ -36,6 +36,8 @@ int channel();
 
 // Background scan for the web page / Bluetooth setup (does not drop the hotspot
 // for long: one pass, only on request).
+// call with true BEFORE starting Bluetooth and false after stopping it
+void btCoex(bool on);
 void scanStart();
 bool scanBusy();
 String scanJson();                // [{"s":"name","r":-60,"l":1},...]

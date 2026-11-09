@@ -8,6 +8,7 @@ namespace net {
 static Saved nets[MAX_NETS];
 static int n = 0;
 static bool apOn = false;
+static bool btOn = false;          // Bluetooth setup running (Wi-Fi/BLE share the radio)
 static volatile int scanN = -1;     // scan results ready (-1 none yet)
 static volatile bool scanRun = false;
 static char apName[24] = "";
@@ -70,7 +71,11 @@ static void applyMode() {
   wifi_mode_t m = apOn ? (n ? WIFI_AP_STA : WIFI_AP) : (n ? WIFI_STA : WIFI_OFF);
   if (scanRun && m == WIFI_AP) m = WIFI_AP_STA;
   if (WiFi.getMode() != m) WiFi.mode(m);
-  if (m != WIFI_OFF) WiFi.setSleep(false);  // power save drops hotspot clients in AP+STA
+  // power save drops hotspot clients in AP+STA, so it is off - EXCEPT while
+  // Bluetooth runs: Wi-Fi + BLE coexistence needs modem sleep, with it off the
+  // radio driver aborts ("Should enable WiFi modem sleep when both WiFi and
+  // Bluetooth are enabled") and the board reboots (1.7.0/1.7.1 BLE pairing bug)
+  if (m != WIFI_OFF) WiFi.setSleep(btOn);
 }
 
 void hotspot(bool on) {
@@ -172,6 +177,10 @@ bool remove(const char *s) {
   if (!strcmp(curSsid, s)) { WiFi.disconnect(false, false); wasOnline = false; curSsid[0] = 0; }
   applyMode();
   return true;
+}
+void btCoex(bool on) {
+  btOn = on;
+  if (WiFi.getMode() != WIFI_OFF) WiFi.setSleep(on);
 }
 void reconnectNow() { if (n) startTry(0); }
 

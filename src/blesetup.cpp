@@ -121,6 +121,7 @@ static void fillScan() {
 
 static void start() {
   if (on) return;
+  net::btCoex(true);  // modem sleep on first, or the radio driver aborts
   NimBLEDevice::init("VOLTOL Setup");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
   NimBLEServer *srv = NimBLEDevice::createServer();
@@ -144,6 +145,7 @@ static void stop() {
   NimBLEDevice::deinit(true);
   cStatus = cPub = cScan = nullptr;
   on = false;
+  net::btCoex(false);
   if (haveKey) { mbedtls_ecp_group_free(&grp); mbedtls_mpi_free(&priv); mbedtls_ecp_point_free(&pub); haveKey = false; }
   strlcpy(st, "idle", sizeof st);
 }
