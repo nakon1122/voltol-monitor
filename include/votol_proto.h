@@ -105,6 +105,7 @@ struct Live {
   uint16_t tCoef = 0;
   uint32_t faults = 0;
   uint8_t gearBits = 0, status = 0;
+  uint8_t raw[3] = {0};  // bytes 9, 18, 19: meaning not known yet (throttle search, v1.8.1)
   uint8_t gear() const { return gearBits & 3; }  // 0 L 1 M 2 H 3 S
 };
 inline int16_t be16s(const uint8_t *p) { return (int16_t)((p[0] << 8) | p[1]); }
@@ -119,6 +120,7 @@ inline void parseLive(const uint8_t *f, Live &d) {
   d.tCoef = be16(f + 18);
   d.gearBits = f[20];
   d.status = f[21];
+  d.raw[0] = f[9]; d.raw[1] = f[18]; d.raw[2] = f[19];
 }
 
 // Fault bits as labelled by the official tool's "Fault display" box.

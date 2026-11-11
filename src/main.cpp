@@ -456,7 +456,8 @@ static String liveJsonLocked() {
    .t("status", votol::STATUS_NAMES[S.live.status < 8 ? S.live.status : 0]).i("faults", S.live.faults).t("fault", f)
    .n("hz", S.hz).i("baud", S.baud).i("src", S.src).raw("gps", g.obj()).raw("trip", tr.obj()).n("odo", S.odoKm, 1)
    .t("fw", S.fw).b("sd", S.sd).i("freeKB", S.fsFreeKB).i("maxKmh", cfg.maxKmh).i("maxAmp", cfg.maxAmp)
-   .i("dash", cfg.dash).raw("drag", d.obj());
+   .i("dash", cfg.dash).raw("drag", d.obj())
+   .raw("raw", String("[") + S.live.raw[0] + "," + S.live.raw[1] + "," + S.live.raw[2] + "]");  // unknown bytes 9/18/19
   return j.obj();
 }
 static String listsJson() {
@@ -598,11 +599,13 @@ static void jstr(String &o, const char *s) {
   for (const char *p = s; *p; p++) { if (*p == '"' || *p == '\\') o += '\\'; if ((uint8_t)*p >= 0x20) o += *p; }
   o += '"';
 }
-// 0.2 s samples for the cloud page: [uptime_ms, rpm, km/h, V, A], sent in batches
-// with every upload (2 per second while riding) so the dashboard moves smoothly.
+// Samples for the cloud page: [uptime_ms, rpm, km/h, V, A, drag m, b9, b18, b19], sent in
+// batches with every upload. 0.2 s apart, 0.05 s during a drag run (the cloud draws the
+// run's speed / current / throttle trace from them). b9/b18/b19 = controller bytes whose
+// meaning is not known yet (throttle search); the first 5 fields are as in v1.6.x.
 static uint32_t cloudScanAt = 0;  // Wi-Fi scan asked from the cloud page: results go up for 2 minutes
-static const int FR_N = 10;
-static float frBuf[FR_N][5];
+static const int FR_N = 60;
+static float frBuf[FR_N][9];
 static uint32_t frT[FR_N];  // uptime kept as integer (a float loses ms after 4.6 h)
 static int frHead = 0, frCount = 0;
 static uint32_t frLast = 0;
@@ -622,11 +625,14 @@ static void splitSample() {  // under LOCK
   }
 }
 static void frameSample(uint32_t now) {  // under LOCK
-  if (now - frLast < 200) return;
+  bool running = drag.state == ride::DragTimer::RUN;
+  if (now - frLast < (running ? 50u : 200u)) return;
   frLast = now;
   bool ctl = S.linked;
   float *f = frBuf[frHead];
   frT[frHead] = now; f[0] = 0; f[1] = ctl ? S.live.rpm : 0; f[2] = S.speedOk ? S.kmh : 0; f[3] = ctl ? S.live.volt : 0; f[4] = ctl ? S.live.amp : 0;
+  f[5] = running || drag.state == ride::DragTimer::DONE ? drag.distance() : -1;
+  for (int i = 0; i < 3; i++) f[6 + i] = ctl ? S.live.raw[i] : -1;
   frHead = (frHead + 1) % FR_N;
   if (frCount < FR_N) frCount++;
 }
@@ -660,6 +666,10 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
   for (int i = 0; i < net::count(); i++) { if (i) o += ","; jstr(o, net::saved(i).ssid); }
   o += "],\"hotspot\":"; jstr(o, net::apSsid());
   o += ",\"ip\":"; jstr(o, net::ip());
+  {  // firmware update status, so a failed install from the cloud page shows why
+    const ota::Status &os = ota::status();
+    o += ",\"ota_state\":" + String(os.state) + ",\"ota_progress\":" + String(os.progress) + ",\"ota_msg\":"; jstr(o, os.msg);
+  }
   char d[200];
   snprintf(d, sizeof d, ",\"drag\":{\"state\":\"%s\",\"elapsed_s\":%.3f,\"distance_m\":%.1f,\"run_id\":\"%lu\",\"target_m\":%d,\"splits\":",
            DRAG_STATE[drag.state], drag.elapsed(millis() / 1000.0),
@@ -681,8 +691,9 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
   for (int i = 0; i < frCount; i++) {
     int k = (frHead - frCount + i + FR_N) % FR_N;
     const float *f = frBuf[k];
-    char fr[72];
-    snprintf(fr, sizeof fr, "%s[%lu,%d,%.1f,%.1f,%.1f]", i ? "," : "", (unsigned long)frT[k], (int)f[1], f[2], f[3], f[4]);
+    char fr[110];
+    snprintf(fr, sizeof fr, "%s[%lu,%d,%.1f,%.1f,%.1f,%.1f,%d,%d,%d]", i ? "," : "", (unsigned long)frT[k], (int)f[1], f[2], f[3], f[4], f[5],
+             (int)f[6], (int)f[7], (int)f[8]);
     o += fr;
   }
   frCount = 0;

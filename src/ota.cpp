@@ -113,6 +113,7 @@ static long get(WiFiClientSecure &c, const String &path) {
 }
 static void doCheck() {
   st.state = S_CHECKING;
+  vTaskDelay(pdMS_TO_TICKS(1500));  // let the cloud upload close its connection first (memory)
   WiFiClientSecure c;
   long n = get(c, String(PATH) + "version.json");
   if (n < 0) {

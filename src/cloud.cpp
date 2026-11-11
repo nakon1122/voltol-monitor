@@ -7,6 +7,7 @@
 #include "cloud_ca_bundle.h"
 #include "config.h"
 #include "net.h"
+#include "ota.h"
 
 namespace cloud {
 static const char *BASE = "https://zpsxcdzkayqhzbdcdoed.supabase.co/functions/v1/voltol-device/";
@@ -117,6 +118,10 @@ static void task(void *) {
     if (!ntp) { configTime(0, 0, "time.google.com", "time.cloudflare.com", "pool.ntp.org"); ntp = true; }
     if (!hadClock && clockOk()) { hadClock = true; if (tls) { http.end(); delete tls; tls = nullptr; } }  // reconnect with certificate checks
     if (!configured() || !payloadFn) continue;
+    {  // a firmware download needs the memory of a second secure connection: pause uploads meanwhile
+      uint8_t os = ota::status().state;
+      if (os == ota::S_CHECKING || os == ota::S_DOWNLOADING) { if (tls) { http.end(); delete tls; tls = nullptr; } continue; }
+    }
     if (millis() - last < 500) continue;
     String payload;
     int rpm = 0;
