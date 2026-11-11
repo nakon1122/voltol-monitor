@@ -1,5 +1,5 @@
 // Speed / distance maths, trip statistics, 1-second summaries and the
-// 402 m drag timer. Pure C++ (unit-tested on the PC: test/ride_test.cpp).
+// drag timer (201 / 402 / 1000 m). Pure C++ (unit-tested on the PC: test/ride_test.cpp).
 //
 // The drag timer is fed (time, speed) samples from whichever speed source is
 // active: controller RPM over UART today, a GPS module later. Between samples
@@ -23,9 +23,14 @@ inline float tyreCircMm(int width, int aspect, int rimInch) {
 }
 
 // ---------------------------------------------------------------- drag ----
-static const int SPLITS = 4;
-static const double SPLIT_M[SPLITS] = {18.288, 100.0, 201.168, 402.336};
-static const char *const SPLIT_NAME[SPLITS] = {"60 ft", "100 m", "201 m", "402 m"};
+static const int SPLITS = 5;
+static const double SPLIT_M[SPLITS] = {18.288, 100.0, 201.168, 402.336, 1000.0};
+static const char *const SPLIT_NAME[SPLITS] = {"60 ft", "100 m", "201 m", "402 m", "1000 m"};
+// Run distance (setting): the run finishes at this split.
+static const int TARGETS = 3;
+static const uint8_t TARGET_SPLITS[TARGETS] = {3, 4, 5};   // 201 m, 402 m, 1000 m
+static const char *const TARGET_NAME[TARGETS] = {"201 m", "402 m", "1000 m"};
+inline int targetIx(int splits) { return splits <= 3 ? 0 : splits == 4 ? 1 : 2; }
 
 struct Split {
   bool done = false;
@@ -35,11 +40,15 @@ struct Split {
 };
 struct DragResult {
   Split s[SPLITS];
+  uint8_t n = 4;               // splits in this run (3 = 201 m, 4 = 402 m, 5 = 1000 m)
   float peakA = 0, peakKw = 0, minV = 0;
   bool wheelspin = false;      // wheel accelerated faster than "max traction" (slip suspected)
   bool spinCorrected = false;  // RPM-only run: speed was limited to max traction while slipping
   float maxSlip = 0;           // highest wheel slip vs GPS, % (hybrid mode)
-  bool finished() const { return s[SPLITS - 1].done; }
+  bool finished() const { return n >= 1 && n <= SPLITS && s[n - 1].done; }
+  const Split &last() const { return s[(n >= 1 && n <= SPLITS ? n : SPLITS) - 1]; }
+  double targetM() const { return SPLIT_M[(n >= 1 && n <= SPLITS ? n : SPLITS) - 1]; }
+  int reached() const { int k = 0; while (k < SPLITS && s[k].done) k++; return k; }
 };
 
 // Launch detection. RPM: any wheel movement starts the clock. GPS reports a
@@ -66,6 +75,7 @@ public:
   State state = IDLE;
   DragResult r;
   DragCfg cfg;
+  uint8_t target = 4;   // splits to run (TARGET_SPLITS), applied by arm()
 
   void arm() { state = ARMED; reset(); }
   // Hybrid (GPS + controller): the moment the wheel started turning, from RPM,
@@ -117,7 +127,7 @@ public:
       } else segment(t, v, amp);
       if (kmh <= cfg.readyKmh) { if (stopAt < 0) stopAt = t; else if (t - stopAt > 2) state = ABORTED; }
       else stopAt = -1;
-      if (t - ts > 60) state = ABORTED;
+      if (t - ts > (r.n >= 5 ? 120 : 60)) state = ABORTED;
       if (r.finished()) state = DONE;
       return;
     default: return;
@@ -125,7 +135,7 @@ public:
   }
   // Live read-outs while running.
   double elapsed(double tNow) const {
-    if (state == DONE) return r.s[SPLITS - 1].t;
+    if (state == DONE) return r.last().t;
     if (state != RUN) return 0;
     double e = tNow - ts - (cfg.rollout ? (rollT >= 0 ? rollT : tNow - ts) : 0);
     return e > 0 ? e : 0;
@@ -139,7 +149,7 @@ private:
   float ba[8], secPeak = 0;
   int next = 0, nb = 0;
   bool first = false;
-  void reset() { r = DragResult(); next = 0; dist = 0; lv = 0; stopAt = -1; secPeak = 0; holdFrom = -1; rollT = -1; hint = -1; }
+  void reset() { r = DragResult(); r.n = (target >= 3 && target <= SPLITS) ? target : 4; next = 0; dist = 0; lv = 0; stopAt = -1; secPeak = 0; holdFrom = -1; rollT = -1; hint = -1; }
   // time (s from launch) at which distance `need` from the segment start is reached
   static double solve(double need, double lv, double k, double dt) {
     double tau;
@@ -168,7 +178,7 @@ private:
     double k = (v - lv) / dt;
     double dEnd = dist + (lv + v) * 0.5 * dt;
     if (rollT < 0 && ROLLOUT_M <= dEnd) rollT = lt + solve(ROLLOUT_M - dist, lv, k, dt) - ts;
-    while (next < SPLITS && SPLIT_M[next] <= dEnd) {
+    while (next < r.n && SPLIT_M[next] <= dEnd) {
       double tau = solve(SPLIT_M[next] - dist, lv, k, dt);
       Split &s = r.s[next];
       s.done = true;

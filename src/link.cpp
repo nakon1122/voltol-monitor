@@ -4,7 +4,11 @@
 //    arrives, 150 ms timeout) with the check values from the parameter read
 //  - writes: P1..P7 100 ms apart, wait for "PN", read back and compare
 // Baud rate is auto-detected (9600 default, 115200, 256000).
+// Realtime: the UART hands bytes over 1 character after a frame ends (not
+// after the default ~10 idle characters), and live frames go through a queue
+// to their own task, so this loop never waits for the screen or the web page.
 #include <Arduino.h>
+#include <driver/uart.h>
 #include "config.h"
 #include "link.h"
 #include "gps.h"
@@ -28,6 +32,12 @@ static float hzVal = 0;
 static int16_t lastRpm = 0;
 static volatile bool ackPN = false;
 static volatile int gpsCfgHz = 0;  // >0: send the u-blox setup on our TX line
+struct LiveItem { Live d; uint32_t ms; };
+static QueueHandle_t liveQ;
+static void liveTask(void *) {  // runs onLive (which waits for the shared lock) away from the UART loop
+  LiveItem it;
+  for (;;) if (xQueueReceive(liveQ, &it, portMAX_DELAY) == pdTRUE && onLive) onLive(it.d, it.ms);
+}
 
 // The GPS module's RX shares our TX wire with the controller's RX. The
 // controller ignores UBX bytes (wrong header / baud) and the GPS ignores the
@@ -66,7 +76,12 @@ static Kind pump(uint32_t ms, Kind stopAt) {
         lastRpm = d.rpm;
         lastLive = millis();
         hzCount++;
-        if (onLive) onLive(d, lastLive);
+        LiveItem it{d, lastLive};
+        if (xQueueSend(liveQ, &it, 0) != pdTRUE) {  // consumer behind: keep the newest frame
+          LiveItem old;
+          xQueueReceive(liveQ, &old, 0);
+          xQueueSend(liveQ, &it, 0);
+        }
       } else if (k == K_PARAM) {
         img.storePage(fr.buf);
       } else if (k == K_WRITE_ACK) {
@@ -118,6 +133,7 @@ static void task(void *) {
   uint8_t f[FRAME_LEN];
   U.setRxBufferSize(1024);  // must be set before begin()
   U.begin(BAUDS[baudIx], SERIAL_8N1, VOTOL_RX_PIN, VOTOL_TX_PIN);
+  uart_set_rx_timeout(UART_NUM_2, 1);  // deliver received bytes 1 character after the line goes quiet
   uint32_t silentSince = millis();
   for (;;) {
     if (gpsCfgHz) { int hz = gpsCfgHz; gpsCfgHz = 0; sendGpsConfig(hz); }
@@ -163,6 +179,8 @@ static void task(void *) {
 
 void begin(LiveFn live, ParamsFn params, WriteFn write) {
   onLive = live; onParams = params; onWrite = write;
+  liveQ = xQueueCreate(8, sizeof(LiveItem));
+  xTaskCreatePinnedToCore(liveTask, "votolLive", 6144, nullptr, 2, nullptr, 1);
   xTaskCreatePinnedToCore(task, "votol", 6144, nullptr, 3, nullptr, 0);
 }
 void requestRead() { wantRead = true; }

@@ -10,18 +10,21 @@ using namespace ride;
 
 // Ideal run: constant acceleration a until vmax, sampled every dt starting at phase.
 static double worst = 0;
-static void run(double a, double vmaxKmh, double dt, double phase, double launch) {
+static void run(double a, double vmaxKmh, double dt, double phase, double launch, int target = 4) {
   DragTimer d;
+  d.target = target;
   d.arm();
   double vmax = vmaxKmh / 3.6;
-  for (double t = phase; t < launch + 40; t += dt) {
+  for (double t = phase; t < launch + 90; t += dt) {
     double tau = t - launch, v = tau <= 0 ? 0 : std::min(a * tau, vmax);
     d.feed(t, v * 3.6, 100, 72);
     if (d.state == DragTimer::DONE) break;
   }
   CHECK(d.state == DragTimer::DONE);
   double tAcc = vmax / a, dAcc = 0.5 * a * tAcc * tAcc;
+  CHECK(d.r.n == target);
   for (int i = 0; i < SPLITS; i++) {
+    if (i >= target) { CHECK(!d.r.s[i].done); continue; }
     double D = SPLIT_M[i];
     double want = D <= dAcc ? sqrt(2 * D / a) : tAcc + (D - dAcc) / vmax;
     double vWant = (D <= dAcc ? a * want : vmax) * 3.6;
@@ -38,6 +41,9 @@ int main() {
     run(3.0, 200, 0.1, ph, 1.537);   // 10 Hz UART
     run(5.5, 110, 0.1, ph, 2.011);   // hits top speed before 402 m
     run(4.0, 150, 0.04, ph, 0.777);  // 25 Hz GPS
+    run(3.0, 200, 0.1, ph, 1.537, 3);  // 201 m run
+    run(3.0, 200, 0.1, ph, 1.537, 5);  // 1000 m run
+    run(2.0, 90, 0.1, ph, 0.9, 5);     // slow bike, 1000 m in ~44 s
   }
   printf("drag worst split error: %.4f s\n", worst);
   // Not armed -> nothing happens; stop before the end -> aborted.
@@ -86,7 +92,7 @@ int main() {
         }
         CHECK(d.state == DragTimer::DONE);
         double tr = roll ? sqrt(2 * ROLLOUT_M / a) : 0;
-        for (int i = 0; i < SPLITS; i++) {
+        for (int i = 0; i < d.r.n; i++) {
           double err = fabs(d.r.s[i].t - (sqrt(2 * SPLIT_M[i] / a) - tr));
           if (err > worstG) worstG = err;
           CHECK(err < 0.05);

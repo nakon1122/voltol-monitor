@@ -61,6 +61,7 @@ static void loadSettings() {
   p.begin("voltol", true);
   if (p.getUChar("cfgv", 0) == CFG_VER) p.getBytes("cfg", &cfg, sizeof cfg);
   p.end();
+  if (cfg.dragTarget > 2) cfg.dragTarget = 1;  // field added in v1.8.0 (older settings: 402 m)
 }
 static uint32_t cfgDirtyAt = 0;
 static void saveSettings() {
@@ -144,9 +145,64 @@ static bool gpsDragOk() { return gpsUsable() && S.gpsSats >= 6 && (!S.gpsUbx || 
 static bool dragOnGps() { return cfg.speedSrc == 1 || (cfg.speedSrc == 2 && (gpsUsable() || !vlink::alive())); }
 // Hybrid launch: first two moving RPM samples, extrapolated back to 0 km/h.
 static double hyT0 = -1, hyT1 = -1, hyV1 = 0, hyStill = -1;
+// ---- best run per distance (Preferences "bst0..2"; v1.7.x kept one 402 m best in "best")
+struct OldDragResult {  // v1.7.x layout (4 splits)
+  ride::Split s[4];
+  float peakA, peakKw, minV;
+  bool wheelspin, spinCorrected;
+  float maxSlip;
+};
+static void loadBest() {  // S.best = best run of the chosen distance
+  int ti = cfg.dragTarget <= 2 ? cfg.dragTarget : 1;
+  char k[8], kw[8];
+  snprintf(k, sizeof k, "bst%d", ti); snprintf(kw, sizeof kw, "bsw%d", ti);
+  Preferences p;
+  p.begin("voltol", false);
+  if (!p.isKey("bstm")) {  // one-time move of the old 402 m best
+    OldDragResult o;
+    if (p.getBytes("best", &o, sizeof o) == sizeof o && o.s[3].done) {
+      ride::DragResult r;
+      for (int i = 0; i < 4; i++) r.s[i] = o.s[i];
+      r.n = 4; r.peakA = o.peakA; r.peakKw = o.peakKw; r.minV = o.minV;
+      r.wheelspin = o.wheelspin; r.spinCorrected = o.spinCorrected; r.maxSlip = o.maxSlip;
+      p.putBytes("bst1", &r, sizeof r);
+      char w[16] = ""; p.getString("bestw", w, sizeof w); p.putString("bsw1", w);
+    }
+    p.putBool("bstm", true);
+  }
+  S.haveBest = false; S.bestWhen[0] = 0; S.best = ride::DragResult();
+  if (p.getBytes(k, &S.best, sizeof S.best) == sizeof S.best && S.best.finished()) {
+    S.haveBest = true;
+    p.getString(kw, S.bestWhen, sizeof S.bestWhen);
+  } else S.best = ride::DragResult();
+  p.end();
+  S.best.n = ride::TARGET_SPLITS[ti];
+}
+static void saveBest(const ride::DragResult &r, const char *when) {
+  char k[8], kw[8];
+  int ti = ride::targetIx(r.n);
+  snprintf(k, sizeof k, "bst%d", ti); snprintf(kw, sizeof kw, "bsw%d", ti);
+  Preferences p;
+  p.begin("voltol", false);
+  p.putBytes(k, &r, sizeof r);
+  p.putString(kw, when);
+  p.end();
+}
+static uint8_t appliedTarget = 255;
+static void applyTarget() {  // distance setting changed: show that distance's best, re-arm if waiting
+  if (cfg.dragTarget == appliedTarget) return;
+  appliedTarget = cfg.dragTarget;
+  loadBest();
+  using ride::DragTimer;
+  if (drag.state == DragTimer::ARMED || drag.state == DragTimer::READY) {
+    drag.target = ride::TARGET_SPLITS[cfg.dragTarget];
+    drag.arm();
+  }
+}
 static void armDrag() {
   double g = cfg.maxG10 / 10.0;
   drag.cfg = dragOnGps() ? ride::DragCfg::gps(cfg.rollout, g) : ride::DragCfg::rpm(cfg.rollout, g);
+  drag.target = ride::TARGET_SPLITS[cfg.dragTarget <= 2 ? cfg.dragTarget : 1];
   drag.arm();
   S.dragWaitGps = drag.cfg.fitN > 2 && !gpsDragOk();
   hyT0 = hyT1 = hyStill = -1;
@@ -388,10 +444,10 @@ static String liveJsonLocked() {
          .n("wh", S.trip.wh, 0).n("whkm", S.trip.whPerKm());
   J d; d.t("state", DRAG_STATE[drag.state]).n("el", drag.elapsed(millis() / 1000.0), 2).n("dist", drag.distance())
         .n("spd", drag.speedKmh()).b("gps", drag.cfg.fitN > 2).b("wait", S.dragWaitGps).b("roll", cfg.rollout)
-        .raw("sp", splitsJson(drag.r)).n("peakA", drag.r.peakA, 0).n("peakKw", drag.r.peakKw).b("spin", drag.r.wheelspin)
+        .i("n", drag.r.n).i("target", cfg.dragTarget).raw("sp", splitsJson(drag.r)).n("peakA", drag.r.peakA, 0).n("peakKw", drag.r.peakKw).b("spin", drag.r.wheelspin)
         .b("spinCorr", drag.r.spinCorrected).n("maxSlip", drag.r.maxSlip, 0).b("slipOk", S.slipOk).n("slip", S.slipPct, 0)
         .b("hybrid", drag.cfg.fitN > 2 && S.linked)
-        .b("haveBest", S.haveBest).raw("best", splitsJson(S.best)).t("bestWhen", S.bestWhen);
+        .b("haveBest", S.haveBest).i("bestN", S.best.n).raw("best", splitsJson(S.best)).t("bestWhen", S.bestWhen);
   char gs[2] = {S.linked ? "LMHS"[S.live.gear()] : '-', 0};
   J j;
   j.b("linked", S.linked).b("speedOk", S.speedOk).n("kmh", S.kmh).i("rpm", S.live.rpm).n("volt", S.live.volt)
@@ -418,8 +474,8 @@ static String listsJson() {
   for (int i = 0; i < S.runN; i++) {
     J j; const DragRow &x = S.runs[i];
     String ts = "[", vs = "[";
-    for (int k = 0; k < 4; k++) { ts += String(k ? "," : "") + String(x.t[k], 3); vs += String(k ? "," : "") + String(x.trap[k], 1); }
-    j.t("when", x.when).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
+    for (int k = 0; k < x.n && k < 5; k++) { ts += String(k ? "," : "") + String(x.t[k], 3); vs += String(k ? "," : "") + String(x.trap[k], 1); }
+    j.t("when", x.when).i("n", x.n).b("done", x.done).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
     r += (i ? "," : "") + j.obj();
   }
   for (int i = 0; i < S.backupN; i++) {
@@ -454,14 +510,14 @@ struct SetDef { const char *k; int lo, hi; };
 static const SetDef SETS[] = {{"dash", 0, 2}, {"speedSrc", 0, 2}, {"logRate", 0, 4}, {"cells", 6, 40},
   {"cellEmptyMv", 2000, 4000}, {"cellFullMv", 3000, 4400}, {"maxKmh", 40, 400}, {"maxAmp", 50, 1500},
   {"backlight", 1, 5}, {"wifi", 0, 1}, {"tzHours", -12, 14}, {"rollout", 0, 1}, {"gpsRate", 0, 1},
-  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}, {"advanced", 0, 1}};
+  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}, {"advanced", 0, 1}, {"dragTarget", 0, 2}};
 static int setGet(int i) {
   switch (i) {
   case 0: return cfg.dash; case 1: return cfg.speedSrc; case 2: return cfg.logRate; case 3: return cfg.cells;
   case 4: return cfg.cellEmptyMv; case 5: return cfg.cellFullMv; case 6: return cfg.maxKmh; case 7: return cfg.maxAmp;
   case 8: return cfg.backlight; case 9: return cfg.wifi; case 10: return cfg.tzHours; case 11: return cfg.rollout;
   case 12: return cfg.gpsRate; case 13: return cfg.tyreW; case 14: return cfg.tyreA; case 15: return cfg.tyreR;
-  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; case 18: return cfg.maxG10; default: return cfg.advanced;
+  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; case 18: return cfg.maxG10; case 19: return cfg.advanced; default: return cfg.dragTarget;
   }
 }
 static void setPut(int i, int v) {
@@ -480,7 +536,8 @@ static void setPut(int i, int v) {
   case 14: cfg.tyreA = v; break; case 15: cfg.tyreR = v; break; case 16: cfg.wheelCorr = v; break;
   case 17: cfg.ratioX100 = v; break;
   case 18: cfg.maxG10 = v; break;
-  default: cfg.advanced = v; break;
+  case 19: cfg.advanced = v; break;
+  default: cfg.dragTarget = v; applyTarget(); break;
   }
 }
 // ---- launch profiles (Street / Launch) ----
@@ -604,9 +661,9 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
   o += "],\"hotspot\":"; jstr(o, net::apSsid());
   o += ",\"ip\":"; jstr(o, net::ip());
   char d[200];
-  snprintf(d, sizeof d, ",\"drag\":{\"state\":\"%s\",\"elapsed_s\":%.3f,\"distance_m\":%.1f,\"run_id\":\"%lu\",\"splits\":",
+  snprintf(d, sizeof d, ",\"drag\":{\"state\":\"%s\",\"elapsed_s\":%.3f,\"distance_m\":%.1f,\"run_id\":\"%lu\",\"target_m\":%d,\"splits\":",
            DRAG_STATE[drag.state], drag.elapsed(millis() / 1000.0),
-           drag.state == ride::DragTimer::DONE && drag.r.s[ride::SPLITS - 1].done ? 402.336 : drag.distance(), (unsigned long)dragRunId);
+           drag.state == ride::DragTimer::DONE ? drag.r.targetM() : drag.distance(), (unsigned long)dragRunId, (int)(drag.r.targetM() + 0.5));
   o += d;
   o += "[";
   for (int i = 0; i < ride::SPLITS; i++) {
@@ -698,6 +755,19 @@ static String api(const String &path, const std::function<String(const char *)> 
   UiActions a;
   if (path == "/api/live") out = liveJsonLocked();
   else if (path == "/api/lists") out = listsJson();
+  else if (path == "/api/runs") {  // drag history, newest first (up to 50)
+    static DragRow rows[logger::DRAG_ROWS_MAX];
+    int n = logger::loadDrag(rows, logger::DRAG_ROWS_MAX);
+    out = "[";
+    for (int i = 0; i < n; i++) {
+      const DragRow &x = rows[i];
+      J j; String ts = "[", vs = "[";
+      for (int k = 0; k < x.n && k < 5; k++) { ts += String(k ? "," : "") + String(x.t[k], 3); vs += String(k ? "," : "") + String(x.trap[k], 1); }
+      j.t("when", x.when).i("n", x.n).b("done", x.done).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
+      out += (i ? "," : "") + j.obj();
+    }
+    out += "]";
+  }
   else if (path == "/api/params") out = paramsJson();
   else if (path == "/api/settings") out = settingsJson();
   else if (path == "/api/drag") {
@@ -807,19 +877,17 @@ void setup() {
   S.runN = logger::loadDrag(S.runs, 10);
   S.faultN = logger::loadFaults(S.faults, 10);
   S.backupN = logger::loadBackups(S.backups, 10);
+  applyTarget();
   {
     Preferences p;
     p.begin("voltol", true);
-    if (p.getBytes("best", &S.best, sizeof S.best) == sizeof S.best && S.best.finished()) {
-      S.haveBest = true;
-      p.getString("bestw", S.bestWhen, sizeof S.bestWhen);
-    }
     p.getBytes("prof", &S.prof, sizeof S.prof);
     p.end();
   }
   Serial1.setRxBufferSize(2048);
   Serial1.begin(GPS_BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   web::begin(api, setClock);
+  web::setLive([] { LOCK(); String o = liveJsonLocked(); UNLOCK(); return o; }, [] { return vlink::goodFrames(); });
 #ifdef VOLTOL_HEADLESS
   cfg.wifi = 1;
 #endif
@@ -842,7 +910,7 @@ void setup() {
 }
 
 // ------------------------------------------------------------------- loop ----
-static uint32_t lastUpd = 0, lastFlush = 0, lastSnap = 0, lastTouch = 0;
+static uint32_t lastUpd = 0, lastFlush = 0, lastSnap = 0, lastTouch = 0, lastDrawFrames = 0;
 static bool touchDown = false;
 
 static void doActions(UiActions &a) {
@@ -861,6 +929,7 @@ static void doActions(UiActions &a) {
     cfg.wifi = 1;
 #endif
     cfgDirtyAt = millis(); displayBacklight(cfg.backlight); web::enable(cfg.wifi);
+    applyTarget();
   }
   if (a.newTrip) newTrip(false);
   if (a.checkUpdate) ota::check();
@@ -896,6 +965,10 @@ void loop() {
     S.updProgress = o.progress;
     S.rolledBack = o.rolledBack;
   }
+  if (!timeKnown) {  // internet time (NTP, started by the cloud link) for the log and history dates
+    time_t ut = time(nullptr);
+    if (ut > 1700000000) setClock((uint64_t)ut * 1000, cfg.tzHours * 60);
+  }
   gpsPoll();
   // link status
   S.linked = vlink::alive();
@@ -909,35 +982,36 @@ void loop() {
   strlcpy(S.ssid, web::ssid(), sizeof S.ssid);
   strlcpy(S.ip, cfg.wifi ? "http://192.168.4.1" : "-", sizeof S.ip);
   S.now = now / 1000.0;
-  // finished 402 m run: save it. The best time shown on screen is replaced
+  // finished run: save it. The best time shown on screen is replaced
   // only after the rider leaves the result screen, so it can show "NEW BEST".
   static bool pendingBest = false;
   static ride::DragResult pending;
   static char pendingWhen[16];
-  if (drag.state == ride::DragTimer::DONE && dragSaved != 1) {
+  // every run is saved to the history: finished at the chosen distance, or stopped
+  // early after at least the first split (60 ft)
+  bool ended = drag.state == ride::DragTimer::DONE || (drag.state == ride::DragTimer::ABORTED && drag.r.s[0].done);
+  if (ended && dragSaved != 1) {
     dragSaved = 1;
+    bool done = drag.state == ride::DragTimer::DONE;
     DragRow r;
     shortWhen(r.when, sizeof r.when);
-    for (int i = 0; i < 4; i++) { r.t[i] = drag.r.s[i].t; r.trap[i] = drag.r.s[i].trapKmh; }
+    r.n = drag.r.n; r.done = done;
+    for (int i = 0; i < ride::SPLITS; i++) if (drag.r.s[i].done) { r.t[i] = drag.r.s[i].t; r.trap[i] = drag.r.s[i].trapKmh; }
     r.peakA = drag.r.peakA;
     LOCK();
     logger::dragRow(r);
     S.runN = logger::loadDrag(S.runs, 10);
     UNLOCK();
-    if (!drag.r.spinCorrected && (!S.haveBest || drag.r.s[3].t < S.best.s[3].t)) {
+    if (done && !drag.r.spinCorrected && drag.r.n == S.best.n && (!S.haveBest || drag.r.last().t < S.best.last().t)) {
       pending = drag.r; strlcpy(pendingWhen, r.when, sizeof pendingWhen); pendingBest = true;
-      Preferences p;
-      p.begin("voltol", false);
-      p.putBytes("best", &pending, sizeof pending);
-      p.putString("bestw", pendingWhen);
-      p.end();
+      saveBest(pending, pendingWhen);
     }
   }
-  if (drag.state != ride::DragTimer::DONE) {
+  if (drag.state != ride::DragTimer::DONE && drag.state != ride::DragTimer::ABORTED) {
     dragSaved = -1;
     if (pendingBest) {
       LOCK();
-      S.best = pending; strlcpy(S.bestWhen, pendingWhen, sizeof S.bestWhen); S.haveBest = true;
+      if (pending.n == S.best.n) { S.best = pending; strlcpy(S.bestWhen, pendingWhen, sizeof S.bestWhen); S.haveBest = true; }
       UNLOCK();
       pendingBest = false;
     }
@@ -964,8 +1038,10 @@ void loop() {
     ui::draw(displayGfx(), S, cfg);
     UNLOCK();
     lastUpd = now;
-  } else if (now - lastUpd >= 100) {
+  } else if (now - lastUpd >= 100 || (now - lastUpd >= 40 && vlink::goodFrames() != lastDrawFrames)) {
+    // redraw as soon as a new controller frame arrived (up to 25 Hz), else 10 Hz
     lastUpd = now;
+    lastDrawFrames = vlink::goodFrames();
     LOCK();
     ui::update(displayGfx(), S, cfg);
     UNLOCK();

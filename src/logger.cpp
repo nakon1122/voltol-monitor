@@ -4,7 +4,8 @@
 //   /log/T0042_sec.csv     one row per second: avg / min / max
 //   /faults.csv            fault set/clear events + 5 s of data before each fault
 //   /trips.csv             one summary row per trip
-//   /drag.csv              every finished 402 m run
+//   /drag2.csv             every drag run (201 / 402 / 1000 m; also runs stopped early)
+//   /drag.csv              402 m runs of v1.7.x and older (kept, read when drag2 is empty)
 // Rows are buffered in RAM and written every 2 s from the main loop, so the
 // controller link never waits for the flash. When space runs low the oldest
 // trip files are deleted first.
@@ -133,19 +134,22 @@ void tripRow(const TripRow &t) {
            t.whKm, (unsigned)t.secs);
   append("/trips.csv", l, "trip,start,km,max_km_h,avg_km_h,max_amp,wh,wh_per_km,seconds\n");
 }
+static const int DRAG_M[6] = {0, 0, 0, 201, 402, 1000};
 void dragRow(const DragRow &r) {
-  char l[200];
-  snprintf(l, sizeof l, "%s,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.1f,%.1f,%.0f\n", r.when, r.t[0], r.t[1], r.t[2], r.t[3],
-           r.trap[0], r.trap[1], r.trap[2], r.trap[3], r.peakA);
-  append("/drag.csv", l, "time,t_60ft,t_100m,t_201m,t_402m,trap_60ft,trap_100m,trap_201m,trap_402m,peak_amp\n");
+  char l[240];
+  int k = snprintf(l, sizeof l, "%s,%d,%s", r.when, DRAG_M[r.n <= 5 ? r.n : 4], r.done ? "finished" : "stopped");
+  for (int i = 0; i < 5; i++) k += snprintf(l + k, sizeof l - k, r.t[i] > 0 ? ",%.3f" : ",", r.t[i]);
+  for (int i = 0; i < 5; i++) k += snprintf(l + k, sizeof l - k, r.trap[i] > 0 ? ",%.1f" : ",", r.trap[i]);
+  snprintf(l + k, sizeof l - k, ",%.0f\n", r.peakA);
+  append("/drag2.csv", l, "time,distance_m,result,t_60ft,t_100m,t_201m,t_402m,t_1000m,trap_60ft,trap_100m,trap_201m,trap_402m,trap_1000m,peak_amp\n");
 }
 
 // Last rows of a CSV, newest first (small files: trips, drag, faults).
-static int tail(const char *path, String *out, int max) {
+static int tail(const char *path, String *out, int max, size_t win = 6000) {
   File f = F->open(path, FILE_READ);
   if (!f) return 0;
   size_t sz = f.size();
-  if (sz > 6000) f.seek(sz - 6000);
+  if (sz > win) f.seek(sz - win);
   String all = f.readString();
   f.close();
   int n = 0, end = all.length();
@@ -155,7 +159,8 @@ static int tail(const char *path, String *out, int max) {
     ln.trim();
     end = st + 1;
     if (st < 0) end = 0;
-    if (ln.length() && !isalpha(ln[0])) out[n++] = ln;
+    // skip the header line only: rows may start with a letter ("boot+12s" before the clock is known)
+    if (ln.length() && !ln.startsWith("time,") && !ln.startsWith("trip,") && !ln.startsWith("id,")) out[n++] = ln;
     if (st < 0) break;
   }
   return n;
@@ -183,14 +188,33 @@ int loadTrips(TripRow *rows, int max) {
   return n;
 }
 int loadDrag(DragRow *rows, int max) {
-  String l[10], f[10];
-  int n = tail("/drag.csv", l, max < 10 ? max : 10);
+  static String l[DRAG_ROWS_MAX];
+  String f[14];
+  if (max > DRAG_ROWS_MAX) max = DRAG_ROWS_MAX;
+  int n = tail("/drag2.csv", l, max, 9000);
   for (int i = 0; i < n; i++) {
-    fields(l[i], f, 10);
+    fields(l[i], f, 14);
     DragRow &r = rows[i];
+    r = DragRow();
     strlcpy(r.when, f[0].c_str(), sizeof r.when);
-    for (int k = 0; k < 4; k++) { r.t[k] = f[1 + k].toFloat(); r.trap[k] = f[5 + k].toFloat(); }
-    r.peakA = f[9].toFloat();
+    int m = f[1].toInt();
+    r.n = m >= 1000 ? 5 : m >= 402 ? 4 : 3;
+    r.done = f[2] == "finished";
+    for (int k = 0; k < 5; k++) { r.t[k] = f[3 + k].toFloat(); r.trap[k] = f[8 + k].toFloat(); }
+    r.peakA = f[13].toFloat();
+  }
+  if (n < max) {  // older 402 m runs (v1.7.x file)
+    String o[DRAG_ROWS_MAX];
+    int m = tail("/drag.csv", o, max - n, 6000);
+    for (int i = 0; i < m; i++) {
+      fields(o[i], f, 10);
+      DragRow &r = rows[n + i];
+      r = DragRow();
+      strlcpy(r.when, f[0].c_str(), sizeof r.when);
+      for (int k = 0; k < 4; k++) { r.t[k] = f[1 + k].toFloat(); r.trap[k] = f[5 + k].toFloat(); }
+      r.peakA = f[9].toFloat();
+    }
+    n += m;
   }
   return n;
 }

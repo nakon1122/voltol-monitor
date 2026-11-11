@@ -98,11 +98,25 @@ int main(int argc, char **argv) {
   { ride::DragTimer r; r.cfg = ride::DragCfg::rpm(false, 1.6); r.arm();
     for (double t = 0; t < 12; t += 0.1) { double tau = t - 0.5, real = tau <= 0 ? 0 : fmin(1.3 * 9.81 * tau, 70); double w = real + (tau > 0.2 && tau < 1.0 ? 25 * sin((tau - 0.2) / 0.8 * M_PI) : 0); r.feed(t, w * 3.6, tau > 0 ? 520 : 0, 82); if (r.state == ride::DragTimer::DONE) break; }
     drag = r; live(0); s.live.amp = 0; s.src = 0; s.gpsSeen = false; shot("13g_drag_spin_corrected"); }
+  // ---- run distance 1000 m and 201 m
+  { ride::DragTimer k; k.target = 5; runResult(3.3, 190, 13.0, &k); drag = k; live(170); s.live.amp = 160; s.kw = 12.1f;
+    s.best = ride::DragResult(); s.best.n = 5; s.haveBest = false; shot("13h_drag_1000_run");
+    runResult(3.3, 190, 40, &k); drag = k; live(0); s.live.amp = 0; shot("13i_drag_1000_result"); }
+  { ride::DragTimer k; k.target = 3; runResult(3.3, 160, 25, &k); drag = k; s.best = ride::DragResult(); s.best.n = 3; shot("13j_drag_201_result"); }
+  { ride::DragTimer k; k.target = 4; k.arm();
+    for (double t = 0; t < 16; t += 0.1) { double tau = t - 0.5, v = tau <= 0 ? 0 : tau < 9 ? 3.3 * tau : fmax(0, 29.7 - 9 * (tau - 9)); k.feed(t, v * 3.6, 180, 76); }
+    drag = k; s.best.n = 4; shot("13k_drag_stopped_saved"); }
+  s.best = bestT.r; s.haveBest = true;
   ui::page = PG_DRAG_HIST;
   const char *dates[5] = {"03 Nov 18:31", "03 Nov 18:12", "03 Nov 17:58", "02 Nov 19:20", "02 Nov 19:05"};
   for (int i = 0; i < 5; i++) {
     DragRow &r = s.runs[i]; strcpy(r.when, dates[i]);
-    for (int k = 0; k < 4; k++) { r.t[k] = (float)(i == 0 ? drag.r.s[k].t : s.best.s[k].t) + i * 0.05f * (k + 1); r.trap[k] = (float)drag.r.s[k].trapKmh - i; }
+    const uint8_t ns[5] = {5, 4, 3, 4, 4}; const bool dn[5] = {true, true, true, false, true};
+    r.n = ns[i]; r.done = dn[i];
+    for (int k = 0; k < r.n; k++) {
+      if (!r.done && k == r.n - 1) break;
+      r.t[k] = (float)(k < 4 ? s.best.s[k].t : 14.9) + i * 0.05f * (k + 1); r.trap[k] = (float)(k < 4 ? s.best.s[k].trapKmh : 182) - i;
+    }
   }
   s.runN = 5; shot("14_drag_history");
   // ---- logs

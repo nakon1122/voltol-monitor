@@ -1,6 +1,9 @@
 // Wi-Fi hotspot "VOLTOL-xxxx" (password in config.h) with a small web page:
 //   live values, download/delete of every log CSV and parameter backup,
 //   clock sync from the phone, and firmware update (.bin upload).
+// Realtime: port 81 /live is a Server-Sent-Events stream. Every new controller
+// frame is pushed to the open pages at once (no request per update), from its
+// own task so it never waits for the screen or the port-80 page server.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -19,6 +22,51 @@ static TimeFn setTime;
 static char ssidBuf[24];
 static bool srvStarted = false;
 static String uploadErr;
+
+// ---- realtime stream (SSE, port 81) ----
+static WiFiServer sse(81);
+static const int SSE_MAX = 4;
+static WiFiClient sseCl[SSE_MAX];
+static LiveFn liveFn;
+static FrameFn frameFn;
+static volatile int sseCount = 0;
+static void sseTask(void *) {
+  uint32_t lastSend = 0, lastFrames = 0;
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(5));
+    if (!srvStarted) continue;
+    WiFiClient c = sse.available();
+    if (c) {
+      // read the request head (GET /live ...) then answer with the stream headers
+      uint32_t t0 = millis(); String head;
+      while (c.connected() && millis() - t0 < 300 && head.indexOf("\r\n\r\n") < 0) { while (c.available()) head += (char)c.read(); delay(1); }
+      int slot = -1;
+      for (int i = 0; i < SSE_MAX; i++) if (!sseCl[i] || !sseCl[i].connected()) { slot = i; break; }
+      if (slot < 0) { c.stop(); }
+      else {
+        c.setNoDelay(true);
+        c.print("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n"
+                "Access-Control-Allow-Origin: *\r\nConnection: keep-alive\r\n\r\nretry: 1000\n\n");
+        sseCl[slot] = c;
+      }
+    }
+    int n = 0;
+    for (int i = 0; i < SSE_MAX; i++) if (sseCl[i] && sseCl[i].connected()) n++;
+    sseCount = n;
+    if (!n || !liveFn) continue;
+    uint32_t now = millis(), fr = frameFn ? frameFn() : 0;
+    // a new controller frame (at most every 30 ms), else 10 Hz for GPS / drag timer
+    if (!((fr != lastFrames && now - lastSend >= 30) || now - lastSend >= 100)) continue;
+    lastFrames = fr; lastSend = now;
+    String msg = "data: " + liveFn() + "\n\n";
+    for (int i = 0; i < SSE_MAX; i++) {
+      if (!sseCl[i] || !sseCl[i].connected()) continue;
+      if (sseCl[i].write((const uint8_t *)msg.c_str(), msg.length()) != msg.length()) sseCl[i].stop();
+    }
+  }
+}
+void setLive(LiveFn live, FrameFn frames) { liveFn = live; frameFn = frames; }
+int liveClients() { return sseCount; }
 
 #include "web_page.h"  // gzip of assets/web/index.html (tools/embed_web.py)
 
@@ -105,7 +153,12 @@ void enable(bool en) {
   on = en;
   net::hotspot(en);  // net.cpp keeps hotspot + internet Wi-Fi working together
   strlcpy(ssidBuf, net::apSsid(), sizeof ssidBuf);
-  if (!srvStarted) { srv.begin(); srvStarted = true; }
+  if (!srvStarted) {
+    srv.begin();
+    sse.begin();
+    xTaskCreatePinnedToCore(sseTask, "sse", 6144, nullptr, 2, nullptr, 1);
+    srvStarted = true;
+  }
 }
 void loop() { if (srvStarted) srv.handleClient(); }
 const char *ssid() { return on ? ssidBuf : "off"; }

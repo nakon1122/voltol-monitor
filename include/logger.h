@@ -19,7 +19,8 @@ void flush();
 void tripRow(const TripRow &t);
 void dragRow(const DragRow &r);
 int loadTrips(TripRow *rows, int max);
-int loadDrag(DragRow *rows, int max);
+static const int DRAG_ROWS_MAX = 50;
+int loadDrag(DragRow *rows, int max);   // newest first, up to DRAG_ROWS_MAX
 int loadFaults(FaultRow *rows, int max);
 int loadBackups(BackupRow *rows, int max);
 int saveBackup(const uint8_t *img, uint32_t sum, const char *when, int lastId);

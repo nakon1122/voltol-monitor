@@ -429,7 +429,13 @@ static void dragTop(Gfx &g, const UiState &s, const char *state, uint32_t col) {
   g.fillRect(0, 0, 480, 28, BAR);
   bolt(g, 10, 4, 1, YELLOW);
   g.text(26, 19, "DRAG", F13B, TEXT);
-  g.text(72, 19, "402 m", F11, MUTED2);
+  // run distance; tap to change (not while running)
+  using ride::DragTimer;
+  int st = s.drag->state;
+  bool ran = st == DragTimer::RUN || st == DragTimer::DONE || st == DragTimer::ABORTED;
+  const char *tn = ride::TARGET_NAME[ride::targetIx(ran ? s.drag->r.n : s.best.n)];
+  g.fillRoundRect(68, 5, 70, 18, 9, 0x13202A);
+  g.textMid(103, 14, tn, F11B, YELLOW, AL_C);
   g.fillRoundRect(196, 5, 88, 18, 9, col);
   g.fillRoundRect(197, 6, 86, 16, 8, BAR);
   g.textMid(240, 14, state, F11B, col, AL_C);
@@ -459,23 +465,28 @@ static void dragHint(Gfx &g, const UiState &s, const Settings &c, int state) {
   }
   g.text(240, 114, t, F13, s.dragWaitGps ? YELLOW : SUB, AL_C);
 }
-static void track(Gfx &g, int y, double dist) {
+static void track(Gfx &g, int y, double dist, int n) {
+  double end = ride::SPLIT_M[n - 1];
   g.fillRoundRect(14, y, 452, 8, 4, TRACK);
-  int w = (int)(452 * fmin(dist, 402.336) / 402.336);
+  int w = (int)(452 * fmin(dist, end) / end);
   if (w > 0) g.fillRoundRect(14, y, w < 8 ? 8 : w, 8, 4, GREEN);
-  for (int i = 0; i < ride::SPLITS; i++) {
-    int x = 14 + (int)(452 * ride::SPLIT_M[i] / 402.336);
+  int lastX = -100;
+  for (int i = n - 1; i >= 0; i--) {  // right to left: skip labels that would overlap
+    int x = 14 + (int)(452 * ride::SPLIT_M[i] / end);
     g.fillRect(x, y - 4, 2, 16, 0x9AA7B3);
+    if (lastX - x < 40 && i != n - 1) continue;
     g.text(x > 452 ? 452 : x, y + 24, ride::SPLIT_NAME[i], F10, MUTED, AL_C);
+    lastX = x;
   }
 }
 static void splitTable(Gfx &g, int y, const ride::DragResult &r, const ride::DragResult *best, bool peak, const char *title) {
-  g.fillRoundRect(10, y, 460, 22 + 4 * 24, 8, CARD2);
+  const int n = r.n >= 1 && r.n <= ride::SPLITS ? r.n : 4, rh = n > 4 ? 20 : 24;
+  g.fillRoundRect(10, y, 460, 22 + n * rh, 8, CARD2);
   const int cols[5] = {22, 120, 210, 300, 400};
   const char *head[5] = {title, "TIME", "TRAP", best ? "Δ BEST" : "", peak ? "PEAK A" : ""};
   for (int i = 0; i < 5; i++) g.text(cols[i], y + 15, head[i], F10, MUTED);
-  for (int i = 0; i < ride::SPLITS; i++) {
-    int yy = y + 38 + i * 24;
+  for (int i = 0; i < n; i++) {
+    int yy = y + 38 + i * rh;
     const ride::Split &sp = r.s[i];
     g.text(cols[0], yy, ride::SPLIT_NAME[i], F13, TEXT);
     char t[72];
@@ -520,7 +531,7 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
     else if (s.linked) snprintf(t, sizeof t, T("Distance %.1f m  ·  %.0f A  ·  %.1f kW"), d.distance(), s.live.amp, s.kw);
     else snprintf(t, sizeof t, T("Distance %.1f m  ·  GPS %d sats"), d.distance(), s.gpsSats);
       g.text(20, 120, t, F13, SUB);
-      track(g, 128, d.distance());
+      track(g, 128, d.distance(), d.r.n);
     });
     g.boxed(10, 158, 460, 120, BG, [&] { splitTable(g, 158, d.r, best, false, "SPLIT"); });
     return;
@@ -543,21 +554,23 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
     bool done = d.state == DragTimer::DONE;
     dragTop(g, s, done ? "FINISHED" : "ABORTED", done ? BLUE : RED);
     char t[144];
-    const ride::Split &last = d.r.s[ride::SPLITS - 1];
+    const ride::Split &last = d.r.last();
+    const char *tn = ride::TARGET_NAME[ride::targetIx(d.r.n)];
     if (done) {
       snprintf(t, sizeof t, T("%.2f"), last.t);
       g.text(20, 84, t, F56B, TEXT);
       g.text(26 + g.textWidth(t, F56B), 84, "s", F24B, MUTED2);
-      snprintf(t, sizeof t, T("402 m @ %.1f km/h"), last.trapKmh);
+      snprintf(t, sizeof t, T("%s @ %.1f km/h"), tn, last.trapKmh);
       g.text(20, 108, t, F13B, TEXT);
-      if (!d.r.spinCorrected && best && (!best->finished() || last.t < best->s[3].t)) {
-        snprintf(t, sizeof t, best->finished() ? T("★ NEW BEST %+.2f") : T("★ NEW BEST"), best->finished() ? last.t - best->s[3].t : 0.0);
+      if (!d.r.spinCorrected && best && best->n == d.r.n && (!best->finished() || last.t < best->last().t)) {
+        snprintf(t, sizeof t, best->finished() ? T("★ NEW BEST %+.2f") : T("★ NEW BEST"), best->finished() ? last.t - best->last().t : 0.0);
         g.fillRoundRect(330, 46, 140, 30, 15, YELLOW);
         g.textMid(400, 61, t, F13B, 0x000000, AL_C);
       }
     } else {
       g.text(20, 84, "ABORTED", F38B, RED);
-      g.text(20, 108, "Run stopped before 402 m", F13, SUB);
+      snprintf(t, sizeof t, T("Run stopped before %s · saved to history"), tn);
+      g.text(20, 108, t, F13, SUB);
     }
     if (d.r.peakA > 0) snprintf(t, sizeof t, T("Peak %.0f A · %.1f kW · min %.1f V"), d.r.peakA, d.r.peakKw, d.r.minV);
     else snprintf(t, sizeof t, "%s", T("no controller data"));
@@ -597,21 +610,21 @@ static void dragPage(Gfx &g, const UiState &s, const Settings &c, bool full) {
 }
 static void dragHist(Gfx &g, const UiState &s) {
   header(g, "DRAG HISTORY");
-  const int cols[6] = {14, 120, 190, 260, 330, 405};
-  const char *h[6] = {"DATE", "60 ft", "100 m", "201 m", "402 m", "TRAP"};
-  for (int i = 0; i < 6; i++) g.text(cols[i], 52, h[i], F10, MUTED);
+  const int cols[7] = {12, 106, 166, 226, 286, 346, 416};
+  const char *h[7] = {"DATE", "DIST", "60 ft", "100 m", "201 m", "402 m", "1000 m"};
+  for (int i = 0; i < 7; i++) g.text(cols[i], 52, h[i], F10, MUTED);
   if (!s.runN) g.text(240, 160, "No runs saved yet", F13, MUTED, AL_C);
   for (int r = 0; r < s.runN && r < 9; r++) {
     const DragRow &d = s.runs[r];
     int y = 76 + r * 26;
     if (r % 2 == 0) g.fillRect(6, y - 17, 468, 24, CARD2);
     g.text(cols[0], y, d.when, F11, SUB);
+    g.text(cols[1], y, ride::TARGET_NAME[ride::targetIx(d.n)], F11B, d.done ? YELLOW : MUTED2);
     char t[48];
-    for (int i = 0; i < 4; i++) {
-      if (d.t[i] > 0) snprintf(t, sizeof t, T("%.2f"), d.t[i]); else strcpy(t, "—");
-      g.text(cols[i + 1], y, t, i == 3 ? F13B : F13, TEXT);
+    for (int i = 0; i < 5; i++) {
+      if (i < d.n && d.t[i] > 0) snprintf(t, sizeof t, T("%.2f"), d.t[i]); else strcpy(t, "—");
+      g.text(cols[i + 2], y, t, i == d.n - 1 && d.done ? F13B : F13, i < d.n ? TEXT : DIM);
     }
-    snprintf(t, sizeof t, T("%.1f"), d.trap[3]); g.text(cols[5], y, t, F13, TEXT);
   }
 }
 
@@ -906,10 +919,10 @@ static void launchPage(Gfx &g, const UiState &s) {
 
 // ============================================================ SETUP =======
 struct Row { const char *name; };
-static const int NSROW = 15;
+static const int NSROW = 16;
 static const char *const SROW[NSROW] = {"Language", "Dashboard", "Speed source", "Log rate", "Battery cells", "Cell empty/full",
                                         "Gauge max km/h", "Gauge max A", "Backlight", "Wi-Fi hotspot", "Time zone (UTC)",
-                                        "Drag rollout", "GPS rate", "Max traction (spin)", "Internet Wi-Fi"};
+                                        "Drag rollout", "GPS rate", "Max traction (spin)", "Drag distance", "Internet Wi-Fi"};
 static const char *netName = "";
 static void setupValue(const Settings &c, int i, char *t) {
   switch (i) {
@@ -926,7 +939,8 @@ static void setupValue(const Settings &c, int i, char *t) {
   case 10: snprintf(t, 72, T("%s"), c.rollout ? "1 ft (strip)" : "OFF (0 ft)"); break;
   case 11: snprintf(t, 72, T("%s"), c.gpsRate ? "25 Hz (M10)" : "10 Hz"); break;
   case 12: snprintf(t, 72, T("%.1f g"), c.maxG10 / 10.0); break;
-  case 13: snprintf(t, 72, T("%s"), netName[0] ? netName : "set on web page"); break;
+  case 13: snprintf(t, 72, T("%s"), ride::TARGET_NAME[c.dragTarget <= 2 ? c.dragTarget : 1]); break;
+  case 14: snprintf(t, 72, T("%s"), netName[0] ? netName : "set on web page"); break;
   }
 }
 static Btn srow(int i) { return {10 + (i / 8) * 234, 37 + (i % 8) * 30, 226, 28}; }
@@ -940,8 +954,8 @@ static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
     g.text(b.x + 10, b.y + 11, SROW[i], F10, MUTED);
     char t[96];
     if (i == 0) strcpy(t, c.lang ? "English" : "ไทย"); else setupValue(c, i - 1, t);
-    g.text(b.x + 10, b.y + 25, t, F13B, i == 14 && !s.netOn ? MUTED2 : TEXT);
-    if (i == 14) continue;  // typed on the web page
+    g.text(b.x + 10, b.y + 25, t, F13B, i == 15 && !s.netOn ? MUTED2 : TEXT);
+    if (i == 15) continue;  // typed on the web page
     g.fillRoundRect(b.x + b.w - 72, b.y + 2, 32, 24, 6, CHIP);
     g.textMid(b.x + b.w - 56, b.y + 14, "-", F18B, TEXT, AL_C);
     g.fillRoundRect(b.x + b.w - 37, b.y + 2, 32, 24, 6, CHIP);
@@ -971,6 +985,7 @@ static void adjust(Settings &c, int i, int d) {
   case 10: c.rollout = !c.rollout; break;
   case 11: c.gpsRate = !c.gpsRate; break;
   case 12: clampAdd(c.maxG10, 1, 5, 25); break;
+  case 13: cyc(c.dragTarget, 3); break;
   }
 }
 static const char *const WROW[5] = {"Tyre width (mm)", "Tyre aspect (%)", "Rim (inch)", "Correction (%)", "Gear ratio"};
@@ -1136,6 +1151,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
       if (hit({10, 282, 460, 30}, x, y)) { a.cancelDrag = true; return true; }
       return false;
     }
+    if (hit({60, 0, 86, 28}, x, y)) { c.dragTarget = (uint8_t)((c.dragTarget + 1) % 3); a.settingsChanged = true; return true; }
     if (hit(DB[0], x, y)) { a.cancelDrag = true; go(PG_DASH); return true; }
     if (hit(DB[1], x, y)) { go(PG_DRAG_HIST); return true; }
     if (hit(DB[2], x, y)) { go(PG_WHEEL); return true; }

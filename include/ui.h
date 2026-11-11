@@ -24,6 +24,7 @@ struct Settings {
   uint8_t lang = 0;         // 0 Thai, 1 English
   uint8_t advanced = 0;     // show risky parameters (hall angle, pole pairs ...)
   uint8_t wifi = 1;
+  uint8_t dragTarget = 1;   // drag distance: 0 = 201 m, 1 = 402 m, 2 = 1000 m
   float circMm() const {
     return ride::tyreCircMm(tyreW, tyreA, tyreR) * (1000 + wheelCorr) / 1000.0f;
   }
@@ -32,7 +33,8 @@ static const uint8_t LOG_RATES[5] = {0, 10, 5, 2, 1};  // 0 = every frame
 
 struct TripRow { uint16_t id; char when[16]; float km, maxKmh, avgKmh, maxA, wh, whKm; uint32_t secs; };
 struct FaultRow { char when[16]; bool set; uint32_t code; float kmh, amp, volt; int rpm; };
-struct DragRow { char when[16]; float t[4], trap[4]; float peakA; };
+// one drag run: n = splits of the chosen distance (3 = 201 m, 4 = 402 m, 5 = 1000 m), done = reached it
+struct DragRow { char when[16]; uint8_t n = 4; bool done = true; float t[5] = {0}, trap[5] = {0}; float peakA = 0; };
 struct BackupRow { char when[16]; uint32_t sum; uint8_t id; };
 
 // Launch / street profiles: 3 throttle settings that cut wheel spin.
@@ -68,7 +70,7 @@ struct UiState {
   bool haveBest = false;
   ride::DragResult best;
   char bestWhen[16] = "";
-  DragRow runs[10];
+  DragRow runs[10];         // newest drag runs (screen); the web page reads up to 50
   int runN = 0;
   // logs
   bool sd = false;
