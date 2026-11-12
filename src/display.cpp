@@ -181,6 +181,14 @@ public:
     if (x + w > 480) w = 480 - x;
     if (y + h > 320) h = 320 - y;
     if (w <= 0 || h <= 0) return;
+#if defined(BOARD_HAS_PSRAM)
+    // 8 MB PSRAM: the whole box in one off-screen buffer, pushed in one go (no flicker)
+    int rows = h;
+    lgfx::LGFX_Sprite spr(&tft);
+    spr.setPsram(true);
+    spr.setColorDepth(16);
+    if (!spr.createSprite(w, rows)) return;  // never draw straight to the panel: that flickers
+#else
     int rows = 30000 / (w * 2);
     if (rows < 1) rows = 1;
     if (rows > h) rows = h;
@@ -190,6 +198,7 @@ public:
       Gfx::boxed(x, y, w, h, bg, fn);
       return;
     }
+#endif
     for (int sy = 0; sy < h; sy += rows) {
       int sh = rows < h - sy ? rows : h - sy;
       spr.fillScreen(c565(bg));

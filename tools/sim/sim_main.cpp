@@ -196,5 +196,18 @@ int main(int argc, char **argv) {
   ui::page = PG_SETUP; shot("24_setup");
   ui::page = PG_INFO; shot("26_info_update");
   s.updState = 2; s.updProgress = 62; shot("27_info_downloading");
+  // ---- internet Wi-Fi picked on the screen
+  {
+    const WifiNet nets[6] = {{"Home-WiFi", -48, true, true}, {"VOLTOL-Garage", -58, true, false}, {"TrueMove-5G-7A21", -66, true, false},
+                             {"AIS_Fibre_2.4G", -71, true, false}, {"Cafe Free WiFi", -77, false, false}, {"iPhone ของต้น", -83, true, false}};
+    for (int i = 0; i < 6; i++) s.wifiNets[i] = nets[i];
+    s.wifiN = 6;
+    ui::page = PG_WIFI; shot("28_wifi_list");
+    s.netConnected = false; s.netOn = false; s.wifiScanning = true; s.wifiN = 3; shot("29_wifi_scanning");
+    s.wifiScanning = false; s.wifiN = 6;
+    ui::kbPreset("VOLTOL-Garage", "voltol2026", 0, false); ui::page = PG_KEYB; shot("30_wifi_keyboard");
+    ui::kbPreset("VOLTOL-Garage", "Volt@#2026", 2, true); shot("31_wifi_keyboard_symbols");
+    s.netOn = true; s.netConnected = true; strcpy(s.netSsid, "Home-WiFi"); strcpy(s.netIp, "192.168.1.57");
+  }
   return 0;
 }

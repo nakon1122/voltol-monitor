@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 using namespace votol;
 
@@ -940,7 +941,7 @@ static void setupValue(const Settings &c, int i, char *t) {
   case 11: snprintf(t, 72, T("%s"), c.gpsRate ? "25 Hz (M10)" : "10 Hz"); break;
   case 12: snprintf(t, 72, T("%.1f g"), c.maxG10 / 10.0); break;
   case 13: snprintf(t, 72, T("%s"), ride::TARGET_NAME[c.dragTarget <= 2 ? c.dragTarget : 1]); break;
-  case 14: snprintf(t, 72, T("%s"), netName[0] ? netName : "set on web page"); break;
+  case 14: snprintf(t, 72, T("%s"), netName[0] ? netName : "tap to choose"); break;
   }
 }
 static Btn srow(int i) { return {10 + (i / 8) * 234, 37 + (i % 8) * 30, 226, 28}; }
@@ -955,7 +956,7 @@ static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
     char t[96];
     if (i == 0) strcpy(t, c.lang ? "English" : "ไทย"); else setupValue(c, i - 1, t);
     g.text(b.x + 10, b.y + 25, t, F13B, i == 15 && !s.netOn ? MUTED2 : TEXT);
-    if (i == 15) continue;  // typed on the web page
+    if (i == 15) { g.text(b.x + b.w - 12, b.y + 19, ">", F15B, BLUE, AL_R); continue; }  // opens the Wi-Fi page
     g.fillRoundRect(b.x + b.w - 72, b.y + 2, 32, 24, 6, CHIP);
     g.textMid(b.x + b.w - 56, b.y + 14, "-", F18B, TEXT, AL_C);
     g.fillRoundRect(b.x + b.w - 37, b.y + 2, 32, 24, 6, CHIP);
@@ -1098,6 +1099,188 @@ static void bootPage(Gfx &g, const UiState &s) {
   g.text(240, 300, s.fw, F10, MUTED, AL_C);
 }
 
+static void strlcpy_(char *d, const char *s, size_t n) { snprintf(d, n, "%s", s ? s : ""); }
+// ============================================================ WI-FI =======
+// Internet Wi-Fi picked on the screen: scan list -> keyboard for the password.
+static int kbMode = 0;            // 0 abc, 1 ABC, 2 symbols
+static bool kbShow = false, kbDirty = false;
+static char kbSsid[33] = "", kbPass[65] = "";
+static uint32_t joinAt = 0, wifiDrawAt = 0;
+static const Btn WB_SCAN = {10, 282, 225, 30}, WB_FORGET = {245, 282, 225, 30};
+static const int WROWS = 6;
+static Btn wifiRow(int i) { return {10, 92 + i * 31, 460, 28}; }
+static void sigBars(Gfx &g, int x, int y, int rssi, uint32_t c) {
+  int n = rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -78 ? 2 : 1;
+  for (int i = 0; i < 4; i++) g.fillRect(x + i * 6, y - 4 - i * 4, 4, 4 + i * 4, i < n ? c : TRACK);
+}
+static void lockIcon(Gfx &g, int x, int y, uint32_t c) {
+  g.drawRoundRect(x + 2, y - 15, 8, 10, 3, c);
+  g.fillRoundRect(x, y - 8, 12, 9, 2, c);
+}
+static void wifiStatus(Gfx &g, const UiState &s) {
+  g.fillRoundRect(10, 38, 460, 48, 8, CARD2);
+  char t[96];
+  if (s.netConnected) {
+    g.text(22, 58, "Connected", F11, GREEN);
+    snprintf(t, sizeof t, "%s  %s", s.netSsid, s.netIp);
+    g.textRaw(22, 78, t, F13B, TEXT);
+  } else if (s.netOn) {
+    bool slow = joinAt && nowMs - joinAt > 20000;
+    g.text(22, 58, slow ? "Cannot connect: check the password" : "Connecting...", F11, slow ? RED : YELLOW);
+    g.textRaw(22, 78, s.netSsid, F13B, TEXT);
+  } else {
+    g.text(22, 58, "Not connected", F11, MUTED2);
+    g.text(22, 78, "Tap a network below to join it", F13, SUB);
+  }
+}
+static void wifiList(Gfx &g, const UiState &s) {
+  int n = s.wifiN < WROWS ? s.wifiN : WROWS;
+  for (int i = 0; i < n; i++) {
+    const WifiNet &w = s.wifiNets[i];
+    Btn b = wifiRow(i);
+    bool cur = s.netConnected && !strcmp(w.ssid, s.netSsid);
+    g.fillRoundRect(b.x, b.y, b.w, b.h, 6, cur ? 0x13202A : CARD);
+    g.textRaw(b.x + 12, b.y + 20, w.ssid, F13B, TEXT);
+    if (cur) chip(g, 300, b.y + 5, 86, "connected", DARKGREEN, GREEN);
+    else if (w.saved) chip(g, 300, b.y + 5, 86, "saved", CHIP, SUB);
+    if (w.lock) lockIcon(g, 404, b.y + 22, MUTED2);
+    sigBars(g, 428, b.y + 24, w.rssi, cur ? GREEN : BLUE);
+  }
+  if (s.wifiScanning) g.text(240, 92 + n * 31 + 22, "Scanning...", F13, YELLOW, AL_C);
+  else if (!n) g.text(240, 160, "No networks found. Tap SCAN.", F13, MUTED2, AL_C);
+}
+static void wifiPage(Gfx &g, const UiState &s) {
+  header(g, "WI-FI");
+  wifiStatus(g, s);
+  wifiList(g, s);
+  button(g, WB_SCAN, "SCAN");
+  button(g, WB_FORGET, "FORGET", s.netOn ? CHIP : CARD, s.netOn ? TEXT : DIM);
+  wifiDrawAt = nowMs;
+}
+
+// keyboard: rows of keys built the same way for drawing and for taps
+struct Key { Btn b; const char *label; char ch; int code; };  // code: 0 char, 1 shift, 2 del, 3 mode, 4 space, 5 connect
+static const char *kbRow(int r) {
+  static const char *const R[3][4] = {
+      {"1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm"},
+      {"1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"},
+      {"1234567890", "!@#$%^&*()", "-_=+[]{}/\\", ";:'\",.?|~`"}};
+  return R[kbMode][r];
+}
+static int kbKeys(Key *k) {
+  int n = 0;
+  static char one[64][2];
+  int oi = 0;
+  const int Y0 = 88, H = 40, GAP = 4;
+  for (int r = 0; r < 5; r++) {
+    int y = Y0 + r * (H + GAP);
+    if (r < 3) {
+      const char *cs = kbRow(r);
+      int c = (int)strlen(cs), w = (480 - 12 - (c - 1) * GAP) / c, x = (480 - (c * w + (c - 1) * GAP)) / 2;
+      if (c < 10) { w = (480 - 12 - 9 * GAP) / 10; x = (480 - (c * w + (c - 1) * GAP)) / 2; }
+      for (int i = 0; i < c; i++) {
+        one[oi][0] = cs[i]; one[oi][1] = 0;
+        k[n++] = {{x + i * (w + GAP), y, w, H}, one[oi], cs[i], 0}; oi++;
+      }
+    } else if (r == 3) {
+      const char *cs = kbRow(3);
+      int c = (int)strlen(cs), side = 64, w = (480 - 12 - 2 * side - (c + 1) * GAP) / c;
+      int x = 6;
+      k[n++] = {{x, y, side, H}, kbMode == 2 ? "abc" : "SHIFT", 0, 1}; x += side + GAP;
+      for (int i = 0; i < c; i++) {
+        one[oi][0] = cs[i]; one[oi][1] = 0;
+        k[n++] = {{x, y, w, H}, one[oi], cs[i], 0}; oi++; x += w + GAP;
+      }
+      k[n++] = {{480 - 6 - side, y, side, H}, "DEL", 0, 2};
+    } else {
+      k[n++] = {{6, y, 84, H}, kbMode == 2 ? "abc" : "?123", 0, 3};
+      k[n++] = {{94, y, 230, H}, "SPACE", ' ', 4};
+      k[n++] = {{328, y, 146, H}, "CONNECT", 0, 5};
+    }
+  }
+  return n;
+}
+static void kbField(Gfx &g) {
+  g.fillRoundRect(10, 38, 376, 42, 8, CARD2);
+  char t[72];
+  if (kbShow) snprintf(t, sizeof t, "%s", kbPass);
+  else { int l = (int)strlen(kbPass); for (int i = 0; i < l && i < 40; i++) t[i] = '*'; t[l < 40 ? l : 40] = 0; }
+  int len = (int)strlen(t);
+  const char *shown = t;
+  while (len > 0 && g.rawWidth(shown, F15B) > 340) { shown++; len--; }  // keep the end of a long password in view
+  if (!kbPass[0]) g.text(22, 66, "Password", F13, DIM);
+  else g.textRaw(22, 66, shown, F15B, TEXT);
+  int cx = 22 + (kbPass[0] ? g.rawWidth(shown, F15B) : 0) + 2;
+  g.fillRect(cx, 48, 2, 24, YELLOW);
+}
+static void kbPage(Gfx &g) {
+  g.fillRect(0, 0, 480, 320, BG);
+  g.fillRect(0, 0, 480, 32, BAR);
+  g.text(12, 21, "< WI-FI", F13B, BLUE);
+  g.textRaw(470 - g.rawWidth(kbSsid, F13B), 21, kbSsid, F13B, TEXT);
+  kbField(g);
+  button(g, {392, 38, 78, 42}, kbShow ? "HIDE" : "SHOW");
+  Key k[48];
+  int n = kbKeys(k);
+  for (int i = 0; i < n; i++) {
+    uint32_t bg = k[i].code == 5 ? YELLOW : k[i].code ? CHIP : CARD, fg = k[i].code == 5 ? BG : TEXT;
+    if (k[i].code == 1 && kbMode == 1) { bg = BLUE; fg = BG; }
+    button(g, k[i].b, k[i].label, bg, fg, k[i].code ? F13B : F18B);
+  }
+  kbDirty = false;
+}
+void kbPreset(const char *ssid, const char *pass, int mode, bool show) {
+  strlcpy_(kbSsid, ssid, sizeof kbSsid); strlcpy_(kbPass, pass, sizeof kbPass); kbMode = mode; kbShow = show;
+}
+static bool kbTouch(int x, int y, UiActions &a) {
+  if (hit(BACK, x, y)) { go(PG_WIFI); return true; }
+  if (hit({392, 38, 78, 42}, x, y)) { kbShow = !kbShow; kbDirty = true; return false; }
+  Key k[48];
+  int n = kbKeys(k);
+  for (int i = 0; i < n; i++) {
+    if (!hit(k[i].b, x, y)) continue;
+    int l = (int)strlen(kbPass);
+    switch (k[i].code) {
+    case 0: case 4:
+      if (l < 63) { kbPass[l] = k[i].ch; kbPass[l + 1] = 0; }
+      if (kbMode == 1 && k[i].code == 0 && isalpha((unsigned char)k[i].ch)) { kbMode = 0; return true; }  // one capital, then back
+      kbDirty = true; return false;
+    case 1: kbMode = kbMode == 2 ? 0 : kbMode == 1 ? 0 : 1; return true;
+    case 2: if (l) kbPass[l - 1] = 0; kbDirty = true; return false;
+    case 3: kbMode = kbMode == 2 ? 0 : 2; return true;
+    case 5:
+      strlcpy_(a.wifiSsid, kbSsid, sizeof a.wifiSsid);
+      strlcpy_(a.wifiPass, kbPass, sizeof a.wifiPass);
+      a.wifiJoin = true; joinAt = nowMs ? nowMs : 1;
+      go(PG_WIFI);
+      return true;
+    }
+  }
+  return false;
+}
+static bool wifiTouch(int x, int y, const UiState &s, UiActions &a) {
+  if (hit(BACK, x, y)) { go(PG_SETUP); return true; }
+  if (hit(WB_SCAN, x, y)) { a.wifiScan = true; return true; }
+  if (hit(WB_FORGET, x, y)) {
+    if (s.netOn) { strlcpy_(a.wifiSsid, s.netSsid, sizeof a.wifiSsid); a.wifiForget = true; joinAt = 0; }
+    return true;
+  }
+  int n = s.wifiN < WROWS ? s.wifiN : WROWS;
+  for (int i = 0; i < n; i++) {
+    if (!hit(wifiRow(i), x, y)) continue;
+    const WifiNet &w = s.wifiNets[i];
+    strlcpy_(kbSsid, w.ssid, sizeof kbSsid);
+    kbPass[0] = 0; kbMode = 0; kbShow = false;
+    if (!w.lock) {  // open network: join right away
+      strlcpy_(a.wifiSsid, w.ssid, sizeof a.wifiSsid); a.wifiPass[0] = 0; a.wifiJoin = true; joinAt = nowMs ? nowMs : 1;
+      return true;
+    }
+    go(PG_KEYB);
+    return true;
+  }
+  return false;
+}
+
 // ============================================================ dispatch ====
 void go(Page p) { page = p; menuOpen = false; }
 static void dash(Gfx &g, const UiState &s, const Settings &c, bool full) {
@@ -1124,6 +1307,8 @@ void draw(Gfx &g, const UiState &s, const Settings &c) {
   case PG_LAUNCH: launchPage(g, s); break;
   case PG_WHEEL: wheelPage(g, c); break;
   case PG_INFO: infoPage(g, s); break;
+  case PG_WIFI: wifiPage(g, s); break;
+  case PG_KEYB: kbPage(g); break;
   default: break;
   }
 }
@@ -1132,6 +1317,13 @@ void update(Gfx &g, const UiState &s, const Settings &c) {
   if (page == PG_DASH && !menuOpen) dash(g, s, c, false);
   else if (page == PG_DRAG) dragPage(g, s, c, false);
   else if (page == PG_INFO) g.boxed(0, 248, 480, 30, BG, [&] { updateLine(g, s); });
+  else if (page == PG_KEYB && kbDirty) {
+    kbDirty = false;
+    g.boxed(0, 34, 480, 50, BG, [&] { kbField(g); button(g, {392, 38, 78, 42}, kbShow ? "HIDE" : "SHOW"); });
+  } else if (page == PG_WIFI && nowMs - wifiDrawAt > 1000) {
+    wifiDrawAt = nowMs;
+    g.boxed(0, 34, 480, 244, BG, [&] { wifiStatus(g, s); wifiList(g, s); });
+  }
 }
 bool tick(uint32_t ms) {
   nowMs = ms;
@@ -1263,6 +1455,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     if (hit(SB[0], x, y)) { go(PG_WHEEL); return true; }
     if (hit(SB[1], x, y)) { a.touchCal = true; return true; }
     if (hit(SB[2], x, y)) { go(PG_INFO); return true; }
+    if (hit(srow(NSROW - 1), x, y)) { go(PG_WIFI); a.wifiScan = true; return true; }  // internet Wi-Fi picker
     for (int i = 0; i < NSROW - 1; i++) {
       Btn b = srow(i);
       if (hit({b.x + b.w - 74, b.y, 37, b.h}, x, y)) { adjust(c, i, -1); a.settingsChanged = true; return true; }
@@ -1277,6 +1470,8 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
       if (hit({b.x + b.w - 38, b.y, 38, b.h}, x, y)) { adjustWheel(c, i, +1); a.settingsChanged = true; return true; }
     }
     return false;
+  case PG_WIFI: return wifiTouch(x, y, s, a);
+  case PG_KEYB: return kbTouch(x, y, a);
   case PG_INFO:
     if (hit(IB_CHECK, x, y)) { if (s.netConnected) a.checkUpdate = true; return true; }
     if (hit(IB_INSTALL, x, y)) { if (s.updAvailable) a.installUpdate = true; return true; }

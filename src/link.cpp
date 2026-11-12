@@ -166,11 +166,11 @@ static void task(void *) {
       hzCount = 0;
       hzAt = millis();
     }
-    // nothing valid for 3 s: try the next baud rate, then read params again
+    // VOTOL EM talks 9600 baud only (v1.8.2: no more baud hopping, which made
+    // the screen redraw every few seconds while the controller was off).
+    // Nothing valid for 6 s: just ask for the parameters again.
     if (millis() - lastAny < 3000) silentSince = millis();
-    else if (millis() - silentSince > 3000) {
-      baudIx = (baudIx + 1) % 3;
-      U.updateBaudRate(BAUDS[baudIx]);
+    else if (millis() - silentSince > 6000) {
       silentSince = millis();
       if (!haveParams) wantRead = true;
     }

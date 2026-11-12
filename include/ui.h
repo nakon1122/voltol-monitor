@@ -36,6 +36,7 @@ struct FaultRow { char when[16]; bool set; uint32_t code; float kmh, amp, volt; 
 // one drag run: n = splits of the chosen distance (3 = 201 m, 4 = 402 m, 5 = 1000 m), done = reached it
 struct DragRow { char when[16]; uint8_t n = 4; bool done = true; float t[5] = {0}, trap[5] = {0}; float peakA = 0; };
 struct BackupRow { char when[16]; uint32_t sum; uint8_t id; };
+struct WifiNet { char ssid[33]; int8_t rssi; bool lock, saved; };
 
 // Launch / street profiles: 3 throttle settings that cut wheel spin.
 static const char *const PROF_FIELDS[3] = {"Rate of rise", "Start torque", "Soft-start grade"};
@@ -99,6 +100,10 @@ struct UiState {
   char updLatest[16] = "", updMsg[64] = "";
   const char *updFmt = "";     // updMsg as an English format, translated on screen
   char updArg[24] = "";
+  // internet Wi-Fi picker on the screen
+  WifiNet wifiNets[10];
+  int wifiN = 0;
+  bool wifiScanning = false;
   uint8_t updState = 0;        // ota::State
   int updProgress = 0;
   // info
@@ -113,11 +118,13 @@ struct UiActions {
   bool armDrag = false, cancelDrag = false, settingsChanged = false;
   bool touchCal = false, newTrip = false;
   bool checkUpdate = false, installUpdate = false, profChanged = false;
+  bool wifiScan = false, wifiJoin = false, wifiForget = false;
+  char wifiSsid[33] = "", wifiPass[65] = "";
 };
 
 enum Page : uint8_t {
   PG_BOOT, PG_DASH, PG_DRAG, PG_DRAG_HIST, PG_LOG, PG_GRAPH, PG_FAULTS,
-  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_COUNT
+  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_WIFI, PG_KEYB, PG_COUNT
 };
 
 namespace ui {
@@ -133,4 +140,6 @@ bool touch(int x, int y, UiState &s, Settings &cfg, UiActions &act);
 // Called every loop: closes the dashboard menu after a few seconds etc.
 bool tick(uint32_t ms);
 void go(Page p);
+// on-screen keyboard state (used by the PC preview renderer)
+void kbPreset(const char *ssid, const char *pass, int mode, bool show);
 }  // namespace ui

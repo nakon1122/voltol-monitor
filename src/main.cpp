@@ -25,6 +25,8 @@ static Settings cfg;
 static ride::DragTimer drag;
 static SemaphoreHandle_t lock;
 static volatile bool needFull = true;
+static uint32_t wifiScanAt = 0;
+static int wifiListed = -1;  // scan results copied to the Wi-Fi page
 #define LOCK() xSemaphoreTake(lock, portMAX_DELAY)
 #define UNLOCK() xSemaphoreGive(lock)
 
@@ -396,7 +398,8 @@ static void onParams(const votol::ParamImage &p, bool ok) {
     snprintf(S.msg, sizeof S.msg, "No answer from controller");
     S.msgKind = 2;
   }
-  needFull = true;
+  // a failed read in the background (controller off) must not repaint the whole screen
+  if (ok || ui::page == PG_TUNE || ui::page == PG_EDIT || ui::page == PG_BACKUPS || ui::page == PG_CONFIRM) needFull = true;
   UNLOCK();
 }
 static void onWrite(bool ok, const char *msg) {
@@ -941,6 +944,9 @@ static void doActions(UiActions &a) {
     if (why) { strlcpy(S.updMsg, why, sizeof S.updMsg); S.updFmt = why; S.updArg[0] = 0; } else ota::install();
   }
   if (a.profChanged) saveProf();
+  if (a.wifiScan && !net::scanBusy()) { net::scanStart(); wifiScanAt = millis(); wifiListed = -1; }
+  if (a.wifiJoin && a.wifiSsid[0]) { net::add(a.wifiSsid, a.wifiPass); memset(a.wifiPass, 0, sizeof a.wifiPass); wifiListed = -1; }
+  if (a.wifiForget && a.wifiSsid[0]) { net::remove(a.wifiSsid); wifiListed = -1; }
 }
 
 void loop() {
@@ -968,6 +974,38 @@ void loop() {
     S.updProgress = o.progress;
     S.rolledBack = o.rolledBack;
   }
+  if (ui::page == PG_WIFI) {  // scan results for the on-screen Wi-Fi picker
+    bool busy = net::scanBusy();
+    if (!busy && now - wifiScanAt > 20000) { net::scanStart(); wifiScanAt = now; busy = true; }
+    S.wifiScanning = busy;
+    if (!busy && net::scanCount() != wifiListed) {
+      wifiListed = net::scanCount();
+      WifiNet tmp[10];
+      int n = 0;
+      for (int i = 0; i < net::scanCount(); i++) {
+        String ss; int r; bool lk;
+        if (!net::scanItem(i, ss, r, lk)) continue;
+        bool dup = false;
+        for (int k = 0; k < n; k++) if (!strcmp(tmp[k].ssid, ss.c_str())) { dup = true; if (r > tmp[k].rssi) tmp[k].rssi = r; }
+        if (dup) continue;
+        WifiNet w{};
+        strlcpy(w.ssid, ss.c_str(), sizeof w.ssid);
+        w.rssi = (int8_t)(r < -127 ? -127 : r); w.lock = lk; w.saved = false;
+        for (int k = 0; k < net::count(); k++) if (!strcmp(net::saved(k).ssid, w.ssid)) w.saved = true;
+        if (n < 10) tmp[n++] = w;
+        else {  // keep the 10 strongest
+          int lo = 0;
+          for (int k = 1; k < 10; k++) if (tmp[k].rssi < tmp[lo].rssi) lo = k;
+          if (w.rssi > tmp[lo].rssi) tmp[lo] = w;
+        }
+      }
+      for (int i = 1; i < n; i++) for (int k = i; k > 0 && tmp[k].rssi > tmp[k - 1].rssi; k--) { WifiNet t = tmp[k]; tmp[k] = tmp[k - 1]; tmp[k - 1] = t; }
+      LOCK();
+      memcpy(S.wifiNets, tmp, sizeof tmp);
+      S.wifiN = n;
+      UNLOCK();
+    }
+  } else wifiListed = -1;
   if (!timeKnown) {  // internet time (NTP, started by the cloud link) for the log and history dates
     time_t ut = time(nullptr);
     if (ut > 1700000000) setClock((uint64_t)ut * 1000, cfg.tzHours * 60);
