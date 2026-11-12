@@ -519,7 +519,7 @@ static String paramsJson() {
   return j.obj();
 }
 // Parameter snapshot for the cloud tune page (sent as a "params" event). Compact arrays keep it small:
-// defs [i,group,name,unit,dec,step,min,max,adv], fields [i,raw now,raw on controller].
+// defs [i,group,name,unit,dec,step,min,max,adv,type], fields [i,raw now,raw on controller].
 static String profJson();
 static void jstr(String &o, const char *s);
 static String paramsCloudJson() {
@@ -529,7 +529,7 @@ static String paramsCloudJson() {
     const votol::ParamDef &d = votol::PARAMS[i];
     String e = "[" + String(i) + ",";
     jstr(e, d.group); e += ","; jstr(e, d.name); e += ","; jstr(e, d.unit);
-    e += "," + String(d.dec) + "," + String((long)d.step) + "," + String((long)d.min) + "," + String((long)d.max) + "," + (d.adv ? "1" : "0") + "]";
+    e += "," + String(d.dec) + "," + String((long)d.step) + "," + String((long)d.min) + "," + String((long)d.max) + "," + (d.adv ? "1" : "0") + "," + String((int)d.type) + "]";
     defs += (i ? "," : "") + e;
     fl += String(i ? "," : "") + "[" + String(i) + "," + String((long)votol::getRaw(S.edit, d)) + "," + String((long)votol::getRaw(S.params.b, d)) + "]";
   }
