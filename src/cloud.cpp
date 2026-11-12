@@ -16,6 +16,8 @@ static volatile int httpCode = 0;
 static volatile uint32_t okAt = 0;
 static PayloadFn payloadFn = nullptr;
 static AckFn ackFn = nullptr;
+static String evCode, evBody;  // one pending event (under mtx)
+static uint8_t evTries = 0;
 static CmdFn cmdFn = nullptr;
 static SemaphoreHandle_t mtx;
 
@@ -87,7 +89,7 @@ static void runCommands(const String &reply) {
     return;
   }
   if (!reply.length() || reply[0] != '{' || !cmdFn) return;
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(6144);
   if (deserializeJson(doc, reply)) return;
   JsonArray cmds = doc["cmds"].as<JsonArray>();
   if (cmds.isNull()) return;
@@ -123,6 +125,18 @@ static void task(void *) {
       uint8_t os = ota::status().state;
       if (os == ota::S_CHECKING || os == ota::S_DOWNLOADING) { if (tls) { http.end(); delete tls; tls = nullptr; } continue; }
     }
+    {  // pending event (parameter snapshot): goes out before the next telemetry
+      String code, detail;
+      xSemaphoreTake(mtx, portMAX_DELAY);
+      if (evCode.length()) { code = evCode; detail = evBody; }
+      xSemaphoreGive(mtx);
+      if (code.length()) {
+        int c = post("ingest", "{\"type\":\"event\",\"code\":\"" + code + "\",\"detail\":" + detail + "}", nullptr);
+        xSemaphoreTake(mtx, portMAX_DELAY);
+        if (evCode == code && evBody == detail && (c == 200 || c == 201 || ++evTries >= 3)) { evCode = ""; evBody = ""; evTries = 0; }
+        xSemaphoreGive(mtx);
+      }
+    }
     if (millis() - last < 500) continue;
     String payload;
     int rpm = 0;
@@ -143,6 +157,12 @@ static void task(void *) {
 }
 
 void setAck(AckFn a) { ackFn = a; }
+void event(const char *code, const String &detailJson) {
+  if (!mtx) return;
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  evCode = code; evBody = detailJson; evTries = 0;
+  xSemaphoreGive(mtx);
+}
 void begin(PayloadFn p, CmdFn c) {
   mtx = xSemaphoreCreateMutex();
   payloadFn = p;

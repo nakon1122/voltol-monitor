@@ -16,6 +16,9 @@ void begin(PayloadFn payload, CmdFn cmd);
 // samples are still waiting, so the next upload goes out right away (catch-up after a drop-out).
 typedef bool (*AckFn)();
 void setAck(AckFn ack);
+// Send one event (code + JSON object) with the next upload; a newer event of the same kind replaces
+// an unsent one. Used for the controller parameter snapshot shown on the cloud tune page.
+void event(const char *code, const String &detailJson);
 bool setToken(const char *hex64);   // from Bluetooth setup / USB serial / module web page
 bool configured();
 void forget();

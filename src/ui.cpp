@@ -740,8 +740,8 @@ static int groupFields(int grp, int *idx) {
 static const Btn ADV_BTN = {360, 0, 120, 32};
 static const Btn TB[3] = {{10, 282, 148, 30}, {166, 282, 148, 30}, {322, 282, 148, 30}};
 static Btn groupBtn(int i) { return {10 + (i % 3) * 154, 102 + (i / 3) * 62, 146, 56}; }
-static const Btn LAUNCH_BAR = {10, 228, 460, 46};
-static void tunePage(Gfx &g, const UiState &s) {
+static const Btn LAUNCH_BAR = {10, 228, 316, 46}, CLOUD_BTN = {334, 228, 136, 46};
+static void tunePage(Gfx &g, const UiState &s, const Settings &c) {
   header(g, "TUNE CONTROLLER", showAdv ? "ADVANCED: ON" : "ADVANCED: OFF", showAdv ? YELLOW : MUTED2);
   bool have = s.params.complete();
   g.fillRoundRect(10, 40, 460, 56, 8, CARD);
@@ -772,8 +772,12 @@ static void tunePage(Gfx &g, const UiState &s) {
   }
   g.fillRoundRect(LAUNCH_BAR.x, LAUNCH_BAR.y, LAUNCH_BAR.w, LAUNCH_BAR.h, 8, have ? 0x1A1408 : CARD2);
   g.text(22, 247, "LAUNCH PROFILE", F13B, have ? YELLOW : DIM);
-  g.text(22, 264, "Street / Launch throttle settings against wheel spin", F10, MUTED);
-  g.text(458, 256, ">", F18B, have ? YELLOW : DIM, AL_R);
+  g.text(22, 264, "Street / Launch vs wheel spin", F10, MUTED);
+  g.text(314, 256, ">", F18B, have ? YELLOW : DIM, AL_R);
+  // writing from the cloud page needs this switch on (reading is always allowed)
+  g.fillRoundRect(CLOUD_BTN.x, CLOUD_BTN.y, CLOUD_BTN.w, CLOUD_BTN.h, 8, c.cloudTune ? 0x0E2A1A : CARD);
+  g.text(CLOUD_BTN.x + 10, CLOUD_BTN.y + 18, "CLOUD TUNE", F10, MUTED);
+  g.text(CLOUD_BTN.x + 10, CLOUD_BTN.y + 37, c.cloudTune ? "ON" : "OFF", F13B, c.cloudTune ? GREEN : MUTED2);
   int ch = changedCount(s);
   button(g, TB[0], s.busy ? "READING..." : "READ", s.busy ? CARD2 : CHIP, TEXT);
   button(g, TB[1], "BACKUPS");
@@ -1299,7 +1303,7 @@ void draw(Gfx &g, const UiState &s, const Settings &c) {
   case PG_LOG: logPage(g, s, c); break;
   case PG_GRAPH: graphPage(g, s); break;
   case PG_FAULTS: faultsPage(g, s); break;
-  case PG_TUNE: tunePage(g, s); break;
+  case PG_TUNE: tunePage(g, s, c); break;
   case PG_EDIT: editPage(g, s); break;
   case PG_CONFIRM: confirmPage(g, s); break;
   case PG_BACKUPS: backupsPage(g, s); break;
@@ -1384,6 +1388,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     for (int i = 0; i < GROUP_COUNT; i++)
       if (hit(groupBtn(i), x, y) && s.params.complete()) { editGroup = i; editSel = 0; editTop = 0; go(PG_EDIT); return true; }
     if (hit(LAUNCH_BAR, x, y) && s.params.complete()) { profSel = 3; go(PG_LAUNCH); return true; }
+    if (hit(CLOUD_BTN, x, y)) { c.cloudTune = !c.cloudTune; a.settingsChanged = true; return true; }
     return false;
   case PG_LAUNCH: {
     if (hit(BACK, x, y)) { go(PG_TUNE); return true; }

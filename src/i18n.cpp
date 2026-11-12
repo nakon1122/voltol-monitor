@@ -72,7 +72,7 @@ static const Pair TH[] = {
     {"No backup yet", "ยังไม่มีค่าสำรอง"}, {"Reading parameters...", "กำลังอ่านค่า..."},
     {"Parameters not read yet", "ยังไม่ได้อ่านค่าพารามิเตอร์"},
     {"Stop the bike, switch on, then press READ", "จอดรถ เปิดสวิตช์ แล้วกด อ่านค่า"},
-    {"LAUNCH PROFILE", "โปรไฟล์ออกตัว"}, {"Street / Launch throttle settings against wheel spin", "ค่าคันเร่ง ขับปกติ / ออกตัว ลดล้อฟรี"},
+    {"LAUNCH PROFILE", "โปรไฟล์ออกตัว"}, {"Street / Launch vs wheel spin", "ขับปกติ / ออกตัว ลดล้อฟรี"}, {"CLOUD TUNE", "จูนผ่าน Cloud"},
     {"READING...", "กำลังอ่าน..."}, {"READ", "อ่านค่า"}, {"BACKUPS", "ค่าสำรอง"}, {"WRITE (%d)", "เขียนค่า (%d)"},
     {"WRITE", "เขียนค่า"}, {"UP", "ขึ้น"}, {"DOWN", "ลง"}, {"was %s", "เดิม %s"}, {"UNDO", "คืนค่า"}, {"DONE", "เสร็จ"},
     {"%d settings", "%d ค่า"}, {"%d settings · %d changed", "%d ค่า · แก้ %d"}, {"ADVANCED: ON", "ขั้นสูง: เปิด"},

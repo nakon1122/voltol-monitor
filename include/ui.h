@@ -25,6 +25,7 @@ struct Settings {
   uint8_t advanced = 0;     // show risky parameters (hall angle, pole pairs ...)
   uint8_t wifi = 1;
   uint8_t dragTarget = 1;   // drag distance: 0 = 201 m, 1 = 402 m, 2 = 1000 m
+  uint8_t cloudTune = 0;    // 1 = parameters may be WRITTEN from the cloud page (reading is always allowed)
   float circMm() const {
     return ride::tyreCircMm(tyreW, tyreA, tyreR) * (1000 + wheelCorr) / 1000.0f;
   }

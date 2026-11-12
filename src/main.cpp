@@ -65,6 +65,7 @@ static void loadSettings() {
   if (p.getUChar("cfgv", 0) == CFG_VER) p.getBytes("cfg", &cfg, sizeof cfg);
   p.end();
   if (cfg.dragTarget > 2) cfg.dragTarget = 1;  // field added in v1.8.0 (older settings: 402 m)
+  if (cfg.cloudTune > 1) cfg.cloudTune = 0;     // field added in v1.8.4 (default OFF)
 }
 static uint32_t cfgDirtyAt = 0;
 static void saveSettings() {
@@ -380,6 +381,9 @@ static void onLive(const votol::Live &d, uint32_t ms) {
 }
 
 // ------------------------------------------------------------ parameters ----
+static bool cloudParamsWanted = false;  // the cloud page asked for a snapshot
+static uint32_t cloudParamsSum = 0;     // checksum of the last snapshot sent
+static void pushParamsLocked(bool force);
 static void onParams(const votol::ParamImage &p, bool ok) {
   LOCK();
   S.busy = false;
@@ -401,6 +405,7 @@ static void onParams(const votol::ParamImage &p, bool ok) {
   }
   // a failed read in the background (controller off) must not repaint the whole screen
   if (ok || ui::page == PG_TUNE || ui::page == PG_EDIT || ui::page == PG_BACKUPS || ui::page == PG_CONFIRM) needFull = true;
+  pushParamsLocked(false);
   UNLOCK();
 }
 static void onWrite(bool ok, const char *msg) {
@@ -410,6 +415,7 @@ static void onWrite(bool ok, const char *msg) {
   S.msgKind = ok ? 1 : 2;
   if (ok) ui::go(PG_TUNE);
   needFull = true;
+  pushParamsLocked(true);
   UNLOCK();
 }
 
@@ -512,19 +518,56 @@ static String paramsJson() {
    .i("lastBackup", S.backupN ? S.backups[0].id : 0).raw("fields", fl + "]");
   return j.obj();
 }
+// Parameter snapshot for the cloud tune page (sent as a "params" event). Compact arrays keep it small:
+// defs [i,group,name,unit,dec,step,min,max,adv], fields [i,raw now,raw on controller].
+static String profJson();
+static void jstr(String &o, const char *s);
+static String paramsCloudJson() {
+  bool have = S.params.complete();
+  String defs = "[", fl = "[";
+  for (int i = 0; i < votol::PARAM_COUNT && have; i++) {
+    const votol::ParamDef &d = votol::PARAMS[i];
+    String e = "[" + String(i) + ",";
+    jstr(e, d.group); e += ","; jstr(e, d.name); e += ","; jstr(e, d.unit);
+    e += "," + String(d.dec) + "," + String((long)d.step) + "," + String((long)d.min) + "," + String((long)d.max) + "," + (d.adv ? "1" : "0") + "]";
+    defs += (i ? "," : "") + e;
+    fl += String(i ? "," : "") + "[" + String(i) + "," + String((long)votol::getRaw(S.edit, d)) + "," + String((long)votol::getRaw(S.params.b, d)) + "]";
+  }
+  String bk = "[";
+  for (int k = 0; k < S.backupN; k++) {
+    String e = "[" + String(S.backups[k].id) + ",";
+    jstr(e, S.backups[k].when);
+    e += "," + String((unsigned long)S.backups[k].sum) + "]";
+    bk += (k ? "," : "") + e;
+  }
+  J j;
+  j.b("have", have).b("busy", S.busy).t("when", S.paramsWhen).i("sum", have ? S.params.checkSum() : 0)
+   .t("msg", S.msg).i("kind", S.msgKind).b("stopped", S.linked && S.live.rpm == 0).b("linked", S.linked)
+   .b("cloudTune", cfg.cloudTune).t("fw", VOLTOL_FW).raw("defs", defs + "]").raw("fields", fl + "]").raw("backups", bk + "]")
+   .raw("prof", profJson());
+  return j.obj();
+}
+static void pushParamsLocked(bool force) {
+  if (!cloud::configured()) return;
+  uint32_t sum = S.params.complete() ? S.params.checkSum() : 0;
+  if (!force && !cloudParamsWanted && sum == cloudParamsSum) return;  // background re-reads: only send changes
+  cloudParamsWanted = false;
+  cloudParamsSum = sum;
+  cloud::event("params", paramsCloudJson());
+}
 // Settings exposed to the web page: key, pointer, min, max.
 struct SetDef { const char *k; int lo, hi; };
 static const SetDef SETS[] = {{"dash", 0, 2}, {"speedSrc", 0, 2}, {"logRate", 0, 4}, {"cells", 6, 40},
   {"cellEmptyMv", 2000, 4000}, {"cellFullMv", 3000, 4400}, {"maxKmh", 40, 400}, {"maxAmp", 50, 1500},
   {"backlight", 1, 5}, {"wifi", 0, 1}, {"tzHours", -12, 14}, {"rollout", 0, 1}, {"gpsRate", 0, 1},
-  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}, {"advanced", 0, 1}, {"dragTarget", 0, 2}};
+  {"tyreW", 50, 300}, {"tyreA", 30, 100}, {"tyreR", 8, 21}, {"wheelCorr", -100, 100}, {"ratioX100", 50, 2000}, {"maxG10", 5, 25}, {"advanced", 0, 1}, {"dragTarget", 0, 2}, {"cloudTune", 0, 1}};
 static int setGet(int i) {
   switch (i) {
   case 0: return cfg.dash; case 1: return cfg.speedSrc; case 2: return cfg.logRate; case 3: return cfg.cells;
   case 4: return cfg.cellEmptyMv; case 5: return cfg.cellFullMv; case 6: return cfg.maxKmh; case 7: return cfg.maxAmp;
   case 8: return cfg.backlight; case 9: return cfg.wifi; case 10: return cfg.tzHours; case 11: return cfg.rollout;
   case 12: return cfg.gpsRate; case 13: return cfg.tyreW; case 14: return cfg.tyreA; case 15: return cfg.tyreR;
-  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; case 18: return cfg.maxG10; case 19: return cfg.advanced; default: return cfg.dragTarget;
+  case 16: return cfg.wheelCorr; case 17: return cfg.ratioX100; case 18: return cfg.maxG10; case 19: return cfg.advanced; case 20: return cfg.dragTarget; default: return cfg.cloudTune;
   }
 }
 static void setPut(int i, int v) {
@@ -544,7 +587,8 @@ static void setPut(int i, int v) {
   case 17: cfg.ratioX100 = v; break;
   case 18: cfg.maxG10 = v; break;
   case 19: cfg.advanced = v; break;
-  default: cfg.dragTarget = v; applyTarget(); break;
+  case 20: cfg.dragTarget = v; applyTarget(); break;
+  default: cfg.cloudTune = v; break;
   }
 }
 // ---- launch profiles (Street / Launch) ----
@@ -741,7 +785,7 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
   UNLOCK();
 }
 static String cloudCmd(const String &cmd, const String &args, bool &ok) {
-  DynamicJsonDocument a(512);
+  DynamicJsonDocument a(3072);
   deserializeJson(a, args);
   String out;
   LOCK();
@@ -768,6 +812,39 @@ static String cloudCmd(const String &cmd, const String &args, bool &ok) {
     if (why) { ok = false; out = why; } else { restartAt = millis() + 1500; out = "restarting"; }
   } else if (cmd == "drag_arm") { act.armDrag = true; doActions(act); out = "armed"; }
   else if (cmd == "drag_cancel") { act.cancelDrag = true; doActions(act); out = "cancelled"; }
+  else if (cmd == "params_get") { pushParamsLocked(true); out = "sent"; }
+  else if (cmd == "params_read") {
+    if (!S.linked) { ok = false; out = "controller not connected"; }
+    else if (S.busy) { ok = false; out = "busy"; }
+    else { cloudParamsWanted = true; act.readParams = true; doActions(act); out = "reading"; }
+  } else if (cmd == "params_restore") {  // load a backup into the editor (not written yet)
+    act.restoreBackup = a["id"] | -1;
+    if (act.restoreBackup < 0) { ok = false; out = "no backup id"; }
+    else { doActions(act); pushParamsLocked(true); out = S.msg; }
+  } else if (cmd == "params_write") {
+    // args {sum: checksum the page edited from, set: [[index, raw], ...]}
+    uint32_t sum = a["sum"] | 0UL;
+    JsonArray set = a["set"].as<JsonArray>();
+    if (!cfg.cloudTune) { ok = false; out = "Cloud tuning is OFF on the module (Settings)"; }
+    else if (!S.params.complete()) { ok = false; out = "read the controller first"; }
+    else if (sum != S.params.checkSum()) { ok = false; out = "values changed on the controller: read again"; pushParamsLocked(true); }
+    else if (!S.linked || S.live.rpm != 0) { ok = false; out = "Stop the bike first (0 RPM)"; }
+    else if (S.busy) { ok = false; out = "busy"; }
+    else if (drag.state == ride::DragTimer::RUN) { ok = false; out = "drag run in progress"; }
+    else if (set.isNull() || set.size() == 0) { ok = false; out = "nothing to write"; }
+    else {
+      memcpy(S.edit, S.params.b, votol::PARAM_BYTES);
+      int n = 0;
+      for (JsonVariant v : set) {
+        int i = v[0] | -1;
+        if (i < 0 || i >= votol::PARAM_COUNT) continue;
+        votol::setRaw(S.edit, votol::PARAMS[i], v[1] | 0L);  // clamped to the allowed range
+        n++;
+      }
+      if (!n) { ok = false; out = "nothing to write"; }
+      else { act.writeParams = true; doActions(act); out = "writing " + String(n) + " value(s)"; }
+    }
+  }
   else { ok = false; out = "unknown command"; }
   UNLOCK();
   return out;
