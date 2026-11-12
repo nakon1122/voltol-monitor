@@ -439,6 +439,8 @@ static String splitsJson(const ride::DragResult &r) {
   return o + "]";
 }
 static const char *const DRAG_STATE[6] = {"IDLE", "ARMED", "READY", "RUN", "DONE", "ABORTED"};
+static uint32_t dragRunId = 0;   // uptime ms at the start of the current/last run
+static int lastDragState = -1;
 static String liveJsonLocked() {
   char f[96];
   votol::faultText(S.live.faults, f, sizeof f);
@@ -595,8 +597,6 @@ static void doActions(UiActions &a);
 static const char *updateGuard();
 // ------------------------------------------------------------------ cloud ----
 static volatile uint32_t restartAt = 0;
-static uint32_t dragRunId = 0;
-static int lastDragState = -1;
 static void jstr(String &o, const char *s) {
   o += '"';
   for (const char *p = s; *p; p++) { if (*p == '"' || *p == '\\') o += '\\'; if ((uint8_t)*p >= 0x20) o += *p; }
