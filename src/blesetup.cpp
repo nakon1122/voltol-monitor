@@ -270,6 +270,12 @@ void loop() {
                      : cloud::online() ? "cloud-ok" : (t > 90000 ? "cloud-fail" : "online");
     if (t > 1500 && strcmp(st, ns)) {
       setState(ns);
+      if (!strcmp(ns, "wifi-fail") && makeKey()) {  // let the phone send a corrected password right away
+        physical = true;
+        screenOpen = true;
+        if (cPub) cPub->setValue(pubRaw, 65);
+        windowEnd = millis() + WINDOW_MS;
+      }
       if (!strcmp(ns, "cloud-ok") && (int32_t)(windowEnd - millis()) > 20000) windowEnd = millis() + 20000;
     }
   }
