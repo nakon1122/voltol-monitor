@@ -1,0 +1,30 @@
+name: P4 explore
+on:
+  push:
+    branches: [p4c5-explore]
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch KSDIY P4C5 BSP and related components
+        run: |
+          set -x
+          mkdir -p dl && cd dl
+          for c in kevincoooool/ksdiy_p4c5_bsp kevincoooool/esp_lcd_touch_st7123; do
+            n=$(basename $c)
+            curl -s "https://components.espressif.com/api/components/$c" > $n.json
+            url=$(python3 -c "import json;d=json.load(open('$n.json'));v=d['versions'][0];print(v.get('url') or v.get('download_url'))")
+            mkdir -p $n && curl -sL "$url" | tar xz -C $n
+          done
+          find . -type f | grep -v json | head -100
+      - name: Dump BSP
+        run: |
+          cd dl/ksdiy_p4c5_bsp
+          for f in $(find . -type f \( -name "*.h" -o -name "*.c" -o -name "*.cpp" -o -name "*.yml" -o -name "Kconfig*" -o -name "CMakeLists.txt" -o -name "*.md" \)); do echo "=================== $f"; cat "$f"; done
+      - name: LovyanGFX P4 support
+        run: |
+          git clone -q --depth 1 https://github.com/lovyan03/LovyanGFX lg && cd lg && git log -1 --format=%cd && cat library.json | head -5 && ls src/lgfx/v1/platforms/ && ls src/lgfx/v1/platforms/esp32p4 2>/dev/null; grep -rl "ESP32P4\|esp32p4" src | head -20
+      - name: pioarduino P4 hosted defaults
+        run: |
+          curl -sL https://raw.githubusercontent.com/espressif/arduino-esp32/master/libraries/WiFi/src/WiFiGeneric.cpp | grep -n "setPins\|hosted" | head -20
+          curl -sL https://raw.githubusercontent.com/espressif/arduino-esp32/master/cores/esp32/esp32-hal-hosted.c | head -120
