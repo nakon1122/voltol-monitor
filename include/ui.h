@@ -34,7 +34,7 @@ static const uint8_t LOG_RATES[5] = {0, 10, 5, 2, 1};  // 0 = every frame
 struct TripRow { uint16_t id; char when[16]; float km, maxKmh, avgKmh, maxA, wh, whKm; uint32_t secs; };
 struct FaultRow { char when[16]; bool set; uint32_t code; float kmh, amp, volt; int rpm; };
 // one drag run: n = splits of the chosen distance (3 = 201 m, 4 = 402 m, 5 = 1000 m), done = reached it
-struct DragRow { char when[16]; uint8_t n = 4; bool done = true; float t[5] = {0}, trap[5] = {0}; float peakA = 0; };
+struct DragRow { char when[16]; uint8_t n = 4; bool done = true; float t[5] = {0}, trap[5] = {0}; float peakA = 0; uint32_t rid = 0; };
 struct BackupRow { char when[16]; uint32_t sum; uint8_t id; };
 struct WifiNet { char ssid[33]; int8_t rssi; bool lock, saved; };
 

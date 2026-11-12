@@ -152,8 +152,63 @@ void dragRow(const DragRow &r) {
   int k = snprintf(l, sizeof l, "%s,%d,%s", r.when, DRAG_M[r.n <= 5 ? r.n : 4], r.done ? "finished" : "stopped");
   for (int i = 0; i < 5; i++) k += snprintf(l + k, sizeof l - k, r.t[i] > 0 ? ",%.3f" : ",", r.t[i]);
   for (int i = 0; i < 5; i++) k += snprintf(l + k, sizeof l - k, r.trap[i] > 0 ? ",%.1f" : ",", r.trap[i]);
-  snprintf(l + k, sizeof l - k, ",%.0f\n", r.peakA);
-  append("/drag2.csv", l, "time,distance_m,result,t_60ft,t_100m,t_201m,t_402m,t_1000m,trap_60ft,trap_100m,trap_201m,trap_402m,trap_1000m,peak_amp\n");
+  snprintf(l + k, sizeof l - k, ",%.0f,%lu\n", r.peakA, (unsigned long)r.rid);
+  append("/drag2.csv", l, "time,distance_m,result,t_60ft,t_100m,t_201m,t_402m,t_1000m,trap_60ft,trap_100m,trap_201m,trap_402m,trap_1000m,peak_amp,run_id\n");
+}
+
+// ---- drag run traces
+#if !defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5)
+static const int TR_MAX = 700;   // 35 s at 20 Hz
+#else
+static const int TR_MAX = 1400;  // 70 s
+#endif
+static TraceSample *tr = nullptr;
+static int trN = 0;
+void traceStart() {
+  if (!tr) tr = (TraceSample *)malloc(sizeof(TraceSample) * TR_MAX);
+  trN = 0;
+}
+void traceAdd(const TraceSample &s) {
+  if (tr && trN < TR_MAX) tr[trN++] = s;
+}
+void traceSave(uint32_t runId) {
+  if (!tr || trN < 2) return;
+  F->mkdir("/tr");
+  char p[32];
+  snprintf(p, sizeof p, "/tr/%lu.bin", (unsigned long)runId);
+  File f = F->open(p, FILE_WRITE);
+  if (!f) return;
+  f.write((const uint8_t *)tr, sizeof(TraceSample) * trN);
+  f.close();
+  // keep the newest traces only: internal flash 4 runs, microSD / big flash 30 runs
+  int keep = onSd ? 30 :
+#if !defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5)
+      4;
+#else
+      30;
+#endif
+  for (int pass = 0; pass < 40; pass++) {
+    File d = F->open("/tr");
+    if (!d) return;
+    int n = 0;
+    unsigned long oldest = 0xFFFFFFFFUL;
+    String oldName;
+    for (File e = d.openNextFile(); e; e = d.openNextFile()) {
+      String nm = e.name();
+      nm = nm.substring(nm.lastIndexOf('/') + 1);
+      unsigned long id = strtoul(nm.c_str(), nullptr, 10);
+      n++;
+      // a run id is the uptime of the run start: after a restart small ids are newer, so the
+      // file time decides first (written later = newer), the id only between equal times
+      time_t w = e.getLastWrite();
+      unsigned long key = w > 1700000000 ? (unsigned long)(w - 1700000000) : id / 1000;
+      if (key < oldest) { oldest = key; oldName = "/tr/" + nm; }
+      e.close();
+    }
+    d.close();
+    if (n <= keep || !oldName.length()) return;
+    F->remove(oldName);
+  }
 }
 
 // Last rows of a CSV, newest first (small files: trips, drag, faults).
@@ -201,11 +256,11 @@ int loadTrips(TripRow *rows, int max) {
 }
 int loadDrag(DragRow *rows, int max) {
   static String l[DRAG_ROWS_MAX];
-  String f[14];
+  String f[15];
   if (max > DRAG_ROWS_MAX) max = DRAG_ROWS_MAX;
-  int n = tail("/drag2.csv", l, max, 9000);
+  int n = tail("/drag2.csv", l, max, (size_t)max * 112 + 400);
   for (int i = 0; i < n; i++) {
-    fields(l[i], f, 14);
+    int nf = fields(l[i], f, 15);
     DragRow &r = rows[i];
     r = DragRow();
     strlcpy(r.when, f[0].c_str(), sizeof r.when);
@@ -214,9 +269,10 @@ int loadDrag(DragRow *rows, int max) {
     r.done = f[2] == "finished";
     for (int k = 0; k < 5; k++) { r.t[k] = f[3 + k].toFloat(); r.trap[k] = f[8 + k].toFloat(); }
     r.peakA = f[13].toFloat();
+    r.rid = nf > 14 ? strtoul(f[14].c_str(), nullptr, 10) : 0;
   }
   if (n < max) {  // older 402 m runs (v1.7.x file)
-    String o[DRAG_ROWS_MAX];
+    static String o[DRAG_ROWS_MAX];
     int m = tail("/drag.csv", o, max - n, 6000);
     for (int i = 0; i < m; i++) {
       fields(o[i], f, 10);
@@ -228,6 +284,7 @@ int loadDrag(DragRow *rows, int max) {
     }
     n += m;
   }
+  for (int i = 0; i < DRAG_ROWS_MAX; i++) l[i] = String();  // give the text back to the heap
   return n;
 }
 int loadFaults(FaultRow *rows, int max) {

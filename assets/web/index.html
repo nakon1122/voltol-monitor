@@ -34,6 +34,88 @@ h3{font-size:12px;letter-spacing:1px;color:var(--muted);margin:18px 0 8px;text-t
 .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9;padding:16px}.modal .card{max-width:520px;width:100%}
 canvas{width:100%;display:block}
 svg text{font-family:inherit}
+#t-drag.tt{--tt-a:#ff6a1a;--tt-c:#3cc8f0;--tt-g:#3ee08f;--tt-l:#23272d;--tt-card:#121417;--tt-m:#8a939e;--tt-t:#e9edf1;font-family:inherit;color:var(--tt-t);display:flex;flex-direction:column;gap:14px}
+#t-drag.tt section{background:var(--tt-card);border:1px solid var(--tt-l);border-radius:6px;padding:14px;margin:0;animation:ttIn .45s ease-out both}
+#t-drag .tt-k{display:block;font:500 10px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;color:var(--tt-m)}
+#t-drag strong{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+#t-drag .tt-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:#121417f0}
+#t-drag .tt-dot{width:10px;height:10px;border-radius:2px;background:var(--tt-c);animation:ttBlink 1s steps(2,start) infinite}
+#t-drag .tt-code{font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.2em;color:var(--tt-c)}
+#t-drag .tt-bar[data-state=RUN] .tt-dot{background:#ff3d3d}#t-drag .tt-bar[data-state=RUN] .tt-code{color:#ff6b6b}
+#t-drag .tt-bar[data-state=DONE] .tt-dot{background:var(--tt-g);animation:none}#t-drag .tt-bar[data-state=DONE] .tt-code{color:var(--tt-g)}
+#t-drag .tt-title{font-weight:700;letter-spacing:.08em}#t-drag .tt-title b{color:var(--tt-a)}
+#t-drag .tt-src{font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--tt-m);flex:1 1 200px}
+#t-drag .tt-seg{display:flex;gap:4px;border:0;padding:0;margin:0}
+#t-drag .tt-seg legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#t-drag .tt-seg label,#t-drag .tt-seg button{display:flex;align-items:center;min-height:40px;padding:0 14px;border-radius:4px;border:1px solid #2e333a;background:#171a1e;color:#a7b0ba;font:700 13px ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+#t-drag .tt-seg input{position:absolute;opacity:0;pointer-events:none}
+#t-drag .tt-seg label:has(input:checked),#t-drag .tt-seg button[aria-pressed=true]{border-color:var(--tt-a);background:#ff6a1a24;color:var(--tt-t)}
+#t-drag .tt-seg label:has(input:focus-visible){outline:2px solid var(--tt-c)}
+#t-drag .tt-grid{display:flex;flex-wrap:wrap;gap:14px}
+#t-drag .tt-left{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:10px}
+#t-drag .tt-main{flex:3 1 560px;min-width:0;animation-delay:.06s}
+#t-drag .tt-time strong{font-size:clamp(52px,7vw,76px);font-weight:800;letter-spacing:-.04em;line-height:1}
+#t-drag .tt-bar[data-state=DONE]~.tt-grid .tt-time strong{color:var(--tt-a)}
+#t-drag .tt-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#t-drag .tt-two>div,#t-drag .tt-bars>div{border:1px solid var(--tt-l);border-radius:4px;padding:8px 10px}
+#t-drag .tt-two strong{font-size:24px;font-weight:800}#t-drag #raceSpeed{color:var(--tt-g)}
+#t-drag .tt-prog{width:100%;height:6px;appearance:none;border:0;border-radius:2px;background:#1c2025;overflow:hidden}
+#t-drag .tt-prog::-webkit-progress-bar{background:#1c2025}#t-drag .tt-prog::-webkit-progress-value{background:var(--tt-a);transition:width .2s}#t-drag .tt-prog::-moz-progress-bar{background:var(--tt-a)}
+#t-drag .tt-tower{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+#t-drag .tt-tower li{display:grid;grid-template-columns:62px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:46px;padding:0 10px;border:1px solid var(--tt-l);border-radius:4px;background:#15181c;transition:background .25s,border-color .25s}
+#t-drag .tt-tower li[data-done=true]{border-color:var(--tt-a);background:#ff6a1a14;animation:ttPop .4s cubic-bezier(.3,1.5,.5,1)}
+#t-drag .tt-tower b{font:700 12px ui-monospace,Menlo,Consolas,monospace;color:var(--tt-m)}#t-drag .tt-tower li[data-done=true] b{color:var(--tt-a)}
+#t-drag .tt-tower strong{display:block;font-size:18px;font-weight:800}#t-drag .tt-tower small{font:11px ui-monospace,Menlo,Consolas,monospace;color:var(--tt-m)}
+#t-drag .tt-tower em{font:normal 12px ui-monospace,Menlo,Consolas,monospace;color:var(--tt-g)}
+#t-drag .tt-btns{display:flex;gap:8px}#t-drag .tt-btns button{flex:1;min-height:48px;border-radius:4px;font-weight:700;letter-spacing:.12em}
+#t-drag #dragArm{flex:2;background:var(--tt-a);color:#0c0e10;border:0}
+#t-drag .tt-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
+#t-drag .tt-head h2{margin:0;font-size:16px;letter-spacing:.06em}#t-drag .tt-head h2 span{color:var(--tt-m);font-weight:500}
+#t-drag .tt-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+#t-drag .tt-legend button{display:flex;align-items:center;gap:7px;min-height:36px;padding:0 10px;border-radius:4px;border:1px solid #2e333a;background:transparent;color:#a7b0ba;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+#t-drag .tt-legend button[aria-pressed=false]{opacity:.45}
+#t-drag .tt-legend i{width:16px;height:3px;border-radius:2px}#t-drag .tt-legend i.dash{background:repeating-linear-gradient(90deg,#8a939e 0 4px,transparent 4px 7px)}
+#t-drag .tt-chart{position:relative;height:340px;border:1px solid #1c2025;border-radius:4px;background:#0f1114;background-image:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);background-size:100% 25%,10% 100%;overflow:hidden;touch-action:pan-y}
+#t-drag #ttSvg,#t-drag #ttThrSvg{width:100%;height:100%;display:block}
+#t-drag .tt-marks span{position:absolute;top:6px;transform:translateX(-50%);font:11px ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border-radius:3px;background:#0c0e10;color:#5b636e;white-space:nowrap;transition:color .3s}
+#t-drag .tt-marks span[data-hit=true]{color:var(--tt-c)}
+#t-drag .tt-hover{position:absolute;top:30px;padding:8px 10px;border-radius:4px;background:#0c0e10f2;border:1px solid #2e333a;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;pointer-events:none;white-space:nowrap}
+#t-drag .tt-empty[hidden]{display:none}
+#t-drag .tt-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;color:var(--tt-m);font-size:14px;text-align:center;padding:20px}
+#t-drag .tt-axisrow{display:flex;justify-content:space-between;font:11px ui-monospace,Menlo,Consolas,monospace;color:var(--tt-m);margin-top:4px}
+#t-drag .tt-thr{margin-top:12px;border:1px solid var(--tt-l);border-radius:4px;padding:8px 10px}
+#t-drag .tt-thr-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:12px;color:var(--tt-m)}
+#t-drag .tt-thr svg{height:70px!important;margin-top:6px}
+#t-drag .tt-bars{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+#t-drag .tt-bars strong{font-size:18px;font-weight:800}
+#t-drag .tt-log{animation-delay:.12s}
+#t-drag .tt-runs{display:flex;gap:8px;overflow-x:auto;padding:10px 0}
+#t-drag .tt-runs button{flex:0 0 auto;min-width:132px;min-height:64px;text-align:left;padding:8px 12px;border-radius:4px;border:1px solid #2e333a;background:#15181c;color:var(--tt-t);cursor:pointer}
+#t-drag .tt-runs button[aria-pressed=true]{border-color:var(--tt-a);background:#ff6a1a1a}
+#t-drag .tt-runs small{display:block;font:11px ui-monospace,Menlo,Consolas,monospace;color:var(--tt-m)}#t-drag .tt-runs strong{font-size:20px;font-weight:800}
+#t-drag .tt-runs .best{color:var(--tt-a)}
+#t-drag .tt-trace-new{animation:ttDraw 1s ease-out both}
+@keyframes ttIn{from{opacity:0;transform:translateY(8px)}}
+@keyframes ttBlink{to{visibility:hidden}}
+@keyframes ttPop{from{transform:scale(.96);opacity:.4}}
+@keyframes ttDraw{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
+@media(max-width:640px){#t-drag .tt-bars{grid-template-columns:repeat(2,minmax(0,1fr))}#t-drag .tt-chart{height:260px}}
+@media(prefers-reduced-motion:reduce){#t-drag.tt *{animation:none!important}}
+#t-drag .tt-sec{background:var(--tt-card);border:1px solid var(--tt-l);border-radius:6px;padding:14px;animation:ttIn .45s ease-out both}
+#t-drag.tt section{animation:none}
+#t-drag .tt-time{display:flex;align-items:baseline;gap:6px}#t-drag .tt-time span{font-weight:800;color:var(--tt-m);font-size:22px}
+#t-drag .tt-prog{height:6px;border-radius:2px;background:#1c2025;overflow:hidden}#t-drag .tt-prog i{display:block;height:100%;width:0;background:var(--tt-a);transition:width .2s}
+#t-drag .tt-tools{display:flex;flex-wrap:wrap;gap:6px}
+#t-drag .tt-seg button{min-height:36px;padding:0 12px}
+#t-drag #ttZoomOut,#t-drag #ttZoomIn,#t-drag #ttZoomReset,#t-drag #ttFull{min-width:38px;justify-content:center;font-size:16px;padding:0 9px}
+#t-drag .tt-zl{display:flex;align-items:center;font:12px ui-monospace,Menlo,monospace;color:var(--tt-c)}
+#t-drag .tt-chart{touch-action:none;cursor:grab}
+#t-drag .tt-main.tt-max{position:fixed;inset:0;z-index:20;overflow:auto;border-radius:0;padding:max(12px,env(safe-area-inset-top)) 12px 12px}
+#t-drag .tt-main.tt-max .tt-chart{height:calc(100vh - 250px);min-height:240px}
+#t-drag #dArm{flex:1;min-height:52px;border:0;border-radius:4px;font-weight:800;letter-spacing:.12em;background:var(--tt-a);color:#0c0e10;cursor:pointer}
+#t-drag #dArm.r{background:#3A1414;color:#FF3B30}#t-drag #dArm.n{background:#1A222B;color:var(--tt-t)}
+#t-drag .tt-runs:empty::before{content:"—";color:var(--tt-m)}
+#t-drag[hidden]{display:none!important}
 </style></head>
 <body>
 <header><div class="brand"><b>&#9889;</b> VOLTOL<small>Monitor</small></div><span id="pill" class="pill mut">...</span><div class="gears" id="gears"></div><div class="seg" id="langSeg" style="padding:2px"><button data-l="th">TH</button><button data-l="en">EN</button></div></header>
@@ -53,18 +135,63 @@ svg text{font-family:inherit}
   <div class="row mut" style="margin-top:10px;font-size:13px"><span id="tripLine"></span><span class="sp"></span><span id="linkLine"></span></div>
 </section>
 <!-- DRAG -->
-<section id="t-drag" hidden>
-  <div class="row" style="margin-bottom:10px"><span class="l" style="margin:0" data-i="Run distance">Run distance</span><div class="seg" id="tgtSeg" style="flex:1"><button data-g="0">201 m</button><button data-g="1">402 m</button><button data-g="2">1000 m</button></div></div>
-  <div class="row"><span id="dState" class="pill" style="margin:0">IDLE</span><span class="sp"></span><span class="mut" id="dSrc" style="font-size:12px"></span></div>
-  <div class="row" style="margin:14px 0 4px;align-items:flex-end"><div class="big" id="dTime" style="font-size:72px">0.00</div><span class="mut" style="font-size:22px;font-weight:800">s</span><span class="sp"></span>
-    <div style="text-align:right"><div class="l" data-i="Speed">Speed</div><div class="v"><span id="dSpd">0.0</span><small>km/h</small></div></div></div>
-  <div class="sub" id="dHint" style="font-size:14px;margin:6px 0 12px"></div>
-  <svg id="dTrack" viewBox="0 0 460 34" style="width:100%"></svg>
-  <div class="card c2" style="margin-top:10px"><table><thead><tr><th data-i="Split">Split</th><th data-i="Time">Time</th><th data-i="Trap">Trap</th><th data-i="Δ best">Δ best</th><th id="pkH" data-i="Peak A">Peak A</th></tr></thead><tbody id="dRows"></tbody></table></div>
-  <div class="row" style="margin-top:12px"><button class="btn g" id="dArm" style="flex:1;padding:14px">ARM</button></div>
-  <div class="row" style="margin-top:18px;align-items:center"><h3 style="margin:0" data-i="Drag history">Drag history</h3><span class="sp"></span><a class="bl" href="/dl?f=/drag2.csv" style="font-size:13px" data-i="Download CSV">Download CSV</a></div>
+<section id="t-drag" class="tt" hidden>
+<div class="tt-sec tt-bar" id="ttBar">
+  <span class="tt-dot"></span><span class="tt-code" id="ttCode">STANDBY</span>
+  <span class="tt-title">DRAG · TELEMETRY <b id="ttTitle">402 m</b></span>
+  <span class="tt-src" id="dSrc"></span>
+  <div class="tt-seg" id="tgtSeg" role="group" aria-label="Run distance"><button data-g="0">201 m</button><button data-g="1">402 m</button><button data-g="2">1000 m</button></div>
+</div>
+<div class="tt-grid">
+<div class="tt-sec tt-left">
+  <small class="tt-k">ELAPSED · <span data-i="TIME">TIME</span></small>
+  <div class="tt-time"><strong id="dTime">0.000</strong><span>s</span></div>
+  <div class="tt-two"><div><small class="tt-k">SPEED</small><strong id="dSpd">0.0</strong></div><div><small class="tt-k">DIST</small><strong id="dDist">0.0</strong></div></div>
+  <div class="tt-prog"><i id="dProg"></i></div>
+  <div class="sub" id="dHint" style="font-size:13px;min-height:1.3em"></div>
+  <small class="tt-k">TIMING TOWER</small>
+  <ol id="ttTower" class="tt-tower"></ol>
+  <div class="tt-btns"><button id="dArm">ARM</button></div>
+</div>
+<div class="tt-sec tt-main" id="ttMain">
+  <div class="tt-head">
+    <h2>TRACE · <span id="ttRunLabel">—</span></h2>
+    <div class="tt-tools">
+      <div class="tt-seg tt-axis" role="group"><button type="button" data-axis="d" aria-pressed="true" data-i="DIST">DIST</button><button type="button" data-axis="t" aria-pressed="false" data-i="TIME">TIME</button></div>
+      <div class="tt-seg" role="group" aria-label="Zoom"><button type="button" id="ttZoomOut" aria-label="Zoom out">−</button><span id="ttZoomLabel" class="tt-zl"></span><button type="button" id="ttZoomIn" aria-label="Zoom in">+</button><button type="button" id="ttZoomReset" aria-label="Whole run">⟲</button><button type="button" id="ttFull" aria-pressed="false" aria-label="Full screen">⛶</button></div>
+    </div>
+  </div>
+  <div class="tt-legend" role="group">
+    <button type="button" data-s="kmh" aria-pressed="true"><i style="background:#3EE08F"></i>km/h</button>
+    <button type="button" data-s="amp" aria-pressed="true"><i style="background:#FF6A1A"></i>A</button>
+    <button type="button" data-s="thr" aria-pressed="true"><i style="background:#B98CFF"></i><span data-i="Throttle">Throttle</span></button>
+    <button type="button" data-s="rpm" aria-pressed="false"><i style="background:#3CC8F0"></i>RPM</button>
+    <button type="button" data-s="best" aria-pressed="true"><i class="dash"></i><span data-i="Best">Best</span></button>
+    <button type="button" data-s="raw" aria-pressed="false"><i style="background:#F5D24B"></i><span data-i="Throttle search">Throttle search</span></button>
+  </div>
+  <div class="tt-chart" id="ttChartBox">
+    <svg id="ttSvg" viewBox="0 0 760 330" preserveAspectRatio="none"></svg>
+    <div class="tt-marks" id="ttMarks"></div>
+    <div class="tt-hover" id="ttHover" hidden></div>
+    <p class="tt-empty" id="ttEmpty" data-i="The trace of a run shows here">The trace of a run shows here</p>
+  </div>
+  <div class="tt-axisrow"><span id="ttAx0"></span><span id="ttAx1"></span><span id="ttAx2"></span></div>
+  <div class="tt-thr"><div class="tt-thr-head"><small class="tt-k">THROTTLE</small><span id="ttThrNote"></span></div>
+    <svg id="ttThrSvg" viewBox="0 0 760 70" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+  <div class="tt-bars">
+    <div><small class="tt-k">RPM</small><strong id="dRpm">—</strong></div>
+    <div><small class="tt-k">CURRENT</small><strong id="dAmp">—</strong></div>
+    <div><small class="tt-k">VOLT</small><strong id="dVolt">—</strong></div>
+    <div><small class="tt-k">THROTTLE</small><strong id="dThr">—</strong></div>
+  </div>
+</div>
+</div>
+<div class="tt-sec">
+  <div class="tt-head"><h2>RUN LOG</h2><a class="bl" href="/dl?f=/drag2.csv" style="font-size:13px" data-i="Download CSV">Download CSV</a></div>
+  <div id="ttRuns" class="tt-runs"></div>
   <div class="seg" id="histSeg" style="margin:8px 0"><button data-h="a" class="on" data-i="All">All</button><button data-h="3">201 m</button><button data-h="4">402 m</button><button data-h="5">1000 m</button></div>
-  <div class="card c2" style="overflow-x:auto"><table style="min-width:520px"><thead><tr><th data-i="Date">Date</th><th data-i="DIST">DIST</th><th>60 ft</th><th>100 m</th><th>201 m</th><th>402 m</th><th>1000 m</th><th data-i="Trap">Trap</th></tr></thead><tbody id="runs"></tbody></table></div>
+  <div style="overflow-x:auto"><table style="min-width:520px"><thead><tr><th data-i="Date">Date</th><th data-i="DIST">DIST</th><th>60 ft</th><th>100 m</th><th>201 m</th><th>402 m</th><th>1000 m</th><th data-i="Trap">Trap</th></tr></thead><tbody id="runs"></tbody></table></div>
+</div>
 </section>
 <!-- LOG -->
 <section id="t-log" hidden>
@@ -111,7 +238,7 @@ svg text{font-family:inherit}
 <script>
 const $=id=>document.getElementById(id);
 // ---------- language (TH / EN). I18N = the board's own table (src/i18n.cpp), copied in by tools/embed_web.py
-/*I18N*/const I18N={"A Sport Arc":"A สปอร์ตอาร์ค","B Digital Race":"B ดิจิทัลเรซ","C Twin Gauge":"C เกจคู่","NO LINK":"ไม่มีสัญญาณ","FAULT":"ผิดปกติ","No fault":"ไม่มีข้อผิดพลาด","GPS only · %d sats · no controller":"GPS อย่างเดียว · %d ดวง · ไม่ได้ต่อกล่อง","Waiting for controller (%u baud)":"รอสัญญาณจากกล่อง (%u baud)","BATTERY":"แบตเตอรี่","REGEN":"ชาร์จกลับ","CURRENT":"กระแส","POWER":"กำลัง","CTRL":"กล่อง","MOTOR":"มอเตอร์","TRIP %.1f km   ODO %.0f km":"ทริป %.1f กม.   รวม %.0f กม.","TRIP %.1f km · ODO %.0f km":"ทริป %.1f กม. · รวม %.0f กม.","GEAR":"เกียร์","AMP":"แอมป์","VOLT":"โวลต์","TEMP":"อุณหภูมิ","ctrl/motor":"กล่อง/มอเตอร์","TRIP":"ทริป","ODO":"ระยะรวม","None":"ไม่มี","IDLE":"ว่าง","INIT":"เริ่มระบบ","START":"สตาร์ท","RUN":"วิ่ง","STOP":"หยุด","BRAKE":"เบรก","WAIT":"รอ","STYLE":"หน้าปัด","DRAG":"แดร็ก","LOG":"บันทึก","TUNE":"จูน","SETUP":"ตั้งค่า","< DASH":"< หน้าปัด","GPS: hold still for 1 s%s":"GPS: จอดนิ่ง 1 วินาที%s","Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)":"รอ GPS: %d ดวง ±%.1f กม./ชม. (ต้อง 6 ดวง, ±1.0)","HYBRID: launch from RPM, distance from GPS %.0f Hz%s":"ไฮบริด: ออกตัวจาก RPM ระยะจาก GPS %.0f Hz%s","GPS %.0f Hz · starts above 3 km/h%s":"GPS %.0f Hz · เริ่มนับเมื่อเกิน 3 กม./ชม.%s","GPS %.0f Hz · %d sats · ±%.1f km/h%s":"GPS %.0f Hz · %d ดวง · ±%.1f กม./ชม.%s","Bring the bike to a full stop (0 RPM)%s":"จอดรถให้นิ่งสนิท (0 RPM)%s","0 RPM · Timer starts when the wheel turns%s":"0 RPM · เริ่มจับเวลาทันทีที่ล้อหมุน%s","Press ARM, then launch from a standstill%s":"กด ARM แล้วออกตัวจากจุดหยุดนิ่ง%s"," · rollout 1 ft":" · rollout 1 ฟุต"," · 1 ft rollout":" · rollout 1 ฟุต","TIME":"เวลา","TRAP":"ความเร็วผ่าน","Δ BEST":"Δ ดีสุด","PEAK A":"กระแสสูงสุด","ABORT":"ยกเลิก","SPEED":"ความเร็ว","SPLIT":"ช่วง","Distance %.1f m  ·  %.0f A  ·  slip %.0f%%":"ระยะ %.1f ม.  ·  %.0f A  ·  ล้อฟรี %.0f%%","Distance %.1f m  ·  %.0f A  ·  %.1f kW":"ระยะ %.1f ม.  ·  %.0f A  ·  %.1f kW","Distance %.1f m  ·  GPS %d sats":"ระยะ %.1f ม.  ·  GPS %d ดวง","FINISHED":"เสร็จสิ้น","ARMED":"รอจอดนิ่ง","READY":"พร้อม","ABORTED":"ยกเลิกแล้ว","402 m @ %.1f km/h":"402 ม. @ %.1f กม./ชม.","★ NEW BEST %+.2f":"★ สถิติใหม่ %+.2f","★ NEW BEST":"★ สถิติใหม่","Run stopped before 402 m":"หยุดก่อนถึง 402 ม.","%s @ %.1f km/h":"%s @ %.1f กม./ชม.","Run stopped before %s · saved to history":"หยุดก่อนถึง %s · บันทึกในประวัติแล้ว","DIST":"ระยะ","Drag distance":"ระยะแดร็ก","Run distance":"ระยะวิ่ง","Drag history":"ประวัติการวิ่ง","All":"ทั้งหมด","stopped":"หยุดก่อน","Download CSV":"ดาวน์โหลด CSV","Best":"ดีที่สุด","No runs at this distance yet":"ยังไม่มีรอบที่ระยะนี้","Live: realtime":"สด: เรียลไทม์","Live: polling":"สด: ถามทีละครั้ง","This run":"รอบนี้","Peak %.0f A · %.1f kW · min %.1f V":"สูงสุด %.0f A · %.1f kW · ต่ำสุด %.1f V","no controller data":"ไม่มีข้อมูลจากกล่อง","GPS timing":"จับเวลาด้วย GPS","RPM timing ±0.05 s":"จับเวลาด้วย RPM ±0.05 วิ","SPIN-CORRECTED":"แก้ล้อฟรี","Not counted as best run":"ไม่นับเป็นรอบดีที่สุด","Max wheel slip %.0f%% (GPS)":"ล้อฟรีสูงสุด %.0f%% (GPS)","Wheel spin detected":"ตรวจพบล้อฟรี","EXIT":"ออก","HISTORY":"ประวัติ","WHEEL":"ล้อ","AGAIN":"อีกครั้ง","BEST RUN":"รอบดีที่สุด","No runs yet":"ยังไม่มีรอบวิ่ง","DISARM":"ยกเลิก ARM","DRAG HISTORY":"ประวัติแดร็ก","DATE":"วันที่","No runs saved yet":"ยังไม่มีผลที่บันทึก","SD card":"การ์ด SD","internal":"ภายใน","internal flash":"หน่วยความจำภายใน","Storage: %s · %u KB free of %u KB · rate %s":"ที่เก็บ: %s · ว่าง %u จาก %u KB · อัตรา %s","Storage: %s · %u KB free of %u KB · %u Hz":"ที่เก็บ: %s · ว่าง %u จาก %u KB · %u Hz","max":"สูงสุด","THIS TRIP":"ทริปนี้","km":"กม.","max km/h":"สูงสุด กม./ชม.","avg km/h":"เฉลี่ย กม./ชม.","max A":"สูงสุด A","TRIPS":"ทริปที่ผ่านมา","No trips recorded yet":"ยังไม่มีทริปที่บันทึก","GRAPH":"กราฟ","FAULTS":"ข้อผิดพลาด","NEW TRIP":"เริ่มทริปใหม่","last minutes · 1 point/s":"นาทีล่าสุด · 1 จุด/วินาที","Not enough data yet":"ข้อมูลยังไม่พอ","km/h (left)":"กม./ชม. (ซ้าย)","current A (right)":"กระแส A (ขวา)","FAULT LOG":"บันทึกข้อผิดพลาด","No faults recorded":"ไม่มีข้อผิดพลาด","cleared":"หายแล้ว","Now:":"ตอนนี้:","CLEAR FAULTS":"ล้างข้อผิดพลาด","TUNE CONTROLLER":"จูนกล่องคอนโทรล","Parameters read %s · check %05X":"อ่านค่าเมื่อ %s · ตรวจสอบ %05X","Backup #%u saved before any change · %d backups kept":"สำรองค่า #%u แล้ว · เก็บไว้ %d ชุด","No backup yet":"ยังไม่มีค่าสำรอง","Reading parameters...":"กำลังอ่านค่า...","Parameters not read yet":"ยังไม่ได้อ่านค่าพารามิเตอร์","Stop the bike, switch on, then press READ":"จอดรถ เปิดสวิตช์ แล้วกด อ่านค่า","LAUNCH PROFILE":"โปรไฟล์ออกตัว","Street / Launch throttle settings against wheel spin":"ค่าคันเร่ง ขับปกติ / ออกตัว ลดล้อฟรี","READING...":"กำลังอ่าน...","READ":"อ่านค่า","BACKUPS":"ค่าสำรอง","WRITE (%d)":"เขียนค่า (%d)","WRITE":"เขียนค่า","UP":"ขึ้น","DOWN":"ลง","was %s":"เดิม %s","UNDO":"คืนค่า","DONE":"เสร็จ","%d settings":"%d ค่า","%d settings · %d changed":"%d ค่า · แก้ %d","ADVANCED: ON":"ขั้นสูง: เปิด","ADVANCED: OFF":"ขั้นสูง: ปิด","WRITE PARAMETERS":"เขียนค่าลงกล่อง","These values will be written to the controller:":"ค่าต่อไปนี้จะถูกเขียนลงกล่อง:","+ %d more":"+ อีก %d ค่า","Bike stopped (0 RPM)":"รถจอดนิ่งแล้ว (0 RPM)","Stop the bike first: writing needs 0 RPM":"ต้องจอดรถก่อน: เขียนค่าได้เมื่อ 0 RPM","A backup of the current values is kept (#%u). Values are read back to verify.":"มีค่าสำรองเดิมแล้ว (#%u) และจะอ่านค่ากลับมาตรวจหลังเขียน","CANCEL":"ยกเลิก","WRITING...":"กำลังเขียน...","PARAMETER BACKUPS":"ค่าพารามิเตอร์สำรอง","Saved automatically on every read that differs from the last backup.":"บันทึกอัตโนมัติทุกครั้งที่อ่านค่าแล้วต่างจากชุดล่าสุด","No backups yet - press READ on the TUNE page":"ยังไม่มีค่าสำรอง - กด อ่านค่า ในหน้าจูน","check %05X":"ตรวจสอบ %05X","= controller":"= ค่าในกล่อง","RESTORE":"กู้คืน","Restore loads the backup, then WRITE asks for confirmation.":"กู้คืน = โหลดค่าสำรองมาแก้ไข แล้วกดเขียนค่าเพื่อยืนยัน","Read OK":"อ่านค่าสำเร็จ","No answer from controller":"กล่องไม่ตอบสนอง","Writing...":"กำลังเขียน...","Written and verified OK":"เขียนและตรวจสอบสำเร็จ","Read the parameters first":"ต้องอ่านค่าก่อน","No live data from controller":"ไม่มีข้อมูลจากกล่อง","Motor turning: stop the bike (0 RPM)":"มอเตอร์หมุนอยู่: จอดรถก่อน (0 RPM)","Written, but read-back failed":"เขียนแล้ว แต่อ่านกลับไม่สำเร็จ","Read-back differs: not all values accepted":"อ่านกลับไม่ตรง: กล่องไม่รับบางค่า","Controller did not accept the write":"กล่องไม่รับค่าที่เขียน","Lower throttle rise / start torque = less wheel spin at launch.":"ลด Rate of rise / Start torque = ล้อฟรีน้อยลงตอนออกตัว","STREET":"ขับปกติ","LAUNCH":"ออกตัว","NOW":"ปัจจุบัน","SAVE NOW AS STREET":"บันทึกเป็นขับปกติ","SAVE NOW AS LAUNCH":"บันทึกเป็นออกตัว","Apply = load into the editor, then confirm WRITE (backup kept).":"ใช้ = โหลดค่าเข้าตัวแก้ไข แล้วยืนยันเขียนค่า (มีค่าสำรอง)","Raw values as the PC tool shows them.":"เป็นค่าดิบแบบเดียวกับโปรแกรมในคอม","APPLY STREET":"ใช้ค่าขับปกติ","APPLY LAUNCH":"ใช้ค่าออกตัว","Dashboard":"หน้าปัด","Speed source":"แหล่งความเร็ว","Log rate":"อัตราบันทึก","Battery cells":"จำนวนเซลล์แบต","Cell empty/full":"แรงดันเซลล์ หมด/เต็ม","Gauge max km/h":"เกจสูงสุด กม./ชม.","Gauge max A":"เกจสูงสุด A","Backlight":"ความสว่างจอ","Wi-Fi hotspot":"ฮอตสปอต Wi-Fi","Time zone (UTC)":"เขตเวลา (UTC)","Drag rollout":"Rollout แดร็ก","GPS rate":"ความถี่ GPS","Max traction (spin)":"แรงยึดเกาะสูงสุด","Internet Wi-Fi":"Wi-Fi อินเทอร์เน็ต","Language":"ภาษา","ไทย":"ไทย","English":"English","AUTO":"อัตโนมัติ","MAX":"สูงสุด","ON":"เปิด","OFF":"ปิด","1 ft (strip)":"1 ฟุต (สนาม)","OFF (0 ft)":"ปิด (0 ฟุต)","set on web page":"ตั้งที่หน้าเว็บ","TOUCH CAL":"ปรับทัชสกรีน","INFO":"ข้อมูล","Tyre width (mm)":"หน้ากว้างยาง (มม.)","Tyre aspect (%)":"ซีรีส์ยาง (%)","Rim (inch)":"ขอบล้อ (นิ้ว)","Correction (%)":"ปรับแก้ (%)","Gear ratio":"อัตราทด","WHEEL / SPEED":"ล้อ / ความเร็ว","circumference":"เส้นรอบวง","at 1000 rpm":"ที่ 1000 รอบ","Tip: ride 100 m":"เคล็ดลับ: ขี่ 100 ม.","between 2 marks and":"ระหว่าง 2 จุด แล้ว","adjust Correction":"ปรับแก้จน","until TRIP shows 0.10":"ทริปขึ้น 0.10","Speed = RPM / ratio x circumference. Hub motor: ratio 1.00":"ความเร็ว = รอบ / อัตราทด x เส้นรอบวง · ฮับมอเตอร์ = 1.00","Downloading %s... %d%%":"กำลังดาวน์โหลด %s... %d%%","Not checked yet":"ยังไม่ได้ตรวจ","Join a Wi-Fi network (web page > SETUP)":"ต่อ Wi-Fi ก่อน (หน้าเว็บ > ตั้งค่า)","Update":"อัปเดต","Firmware":"เฟิร์มแวร์","Last update":"อัปเดตล่าสุด","failed to start - previous version restored":"เปิดไม่สำเร็จ - กลับไปใช้เวอร์ชันเดิมแล้ว","Hotspot":"ฮอตสปอต","connecting...":"กำลังเชื่อมต่อ...","not set (web page > SETUP)":"ยังไม่ตั้ง (หน้าเว็บ > ตั้งค่า)","Internet":"อินเทอร์เน็ต","connected":"เชื่อมต่อแล้ว","no data":"ไม่มีข้อมูล","Controller":"กล่องคอนโทรล","Frames":"เฟรม","fix":"จับสัญญาณได้","no fix":"ยังไม่จับสัญญาณ","not connected (optional)":"ไม่ได้ต่อ (ไม่บังคับ)","Storage":"ที่เก็บข้อมูล","Wiring":"การต่อสาย","CHECK FOR UPDATE":"ตรวจหาอัปเดต","INSTALL %s":"ติดตั้ง %s","INSTALL":"ติดตั้ง","Connecting to VOTOL controller...":"กำลังเชื่อมต่อกล่อง VOTOL...","%s · %u baud · %.1f Hz":"%s · %u baud · %.1f Hz","%u good · %u bad":"ดี %u · เสีย %u","%s · %u KB free · RAM %u KB":"%s · ว่าง %u KB · RAM %u KB","Up to date (%s)":"เป็นเวอร์ชันล่าสุดแล้ว (%s)","Version %s available":"มีเวอร์ชัน %s ใหม่","Cannot reach GitHub":"เชื่อมต่อ GitHub ไม่ได้","No internet Wi-Fi connection":"ไม่มีการเชื่อมต่ออินเทอร์เน็ต","Motor turning: stop the bike (0 RPM) to update":"มอเตอร์หมุนอยู่: จอดรถ (0 RPM) ก่อนอัปเดต","Drag run in progress":"กำลังจับเวลาแดร็ก","Too big for this board: install once with USB (FLASH .bat)":"ไฟล์ใหญ่เกินพื้นที่เดิม: แฟลชผ่าน USB 1 ครั้ง (FLASH .bat)","Download failed (%s)":"ดาวน์โหลดไม่สำเร็จ (%s)","Download interrupted":"ดาวน์โหลดขาดหาย","Checksum mismatch - not installed":"ไฟล์ไม่ตรง (checksum) - ไม่ได้ติดตั้ง","Install failed":"ติดตั้งไม่สำเร็จ","Installed %s - restarting":"ติดตั้ง %s แล้ว - กำลังรีสตาร์ต","version.json not found":"ไม่พบ version.json","Bad version.json":"version.json ไม่ถูกต้อง","Battery":"แบตเตอรี่","Sport":"สปอร์ต","3-Speed":"3 สปีด","Motor":"มอเตอร์","Temperature":"อุณหภูมิ","Throttle":"คันเร่ง","Overvoltage":"แรงดันเกิน","Undervoltage":"แรงดันต่ำ","Soft undervoltage":"แรงดันต่ำ (เริ่มลดกำลัง)","Undervoltage variation":"ช่วงแรงดันต่ำ","Busbar current":"กระแสแบต (บัส)","Phase current":"กระแสเฟส","Sport current limit":"กระแสโหมดสปอร์ต","Sport flux-weakening":"Flux-weakening สปอร์ต","Flux-weak compensation":"ชดเชย Flux-weak","Speed ratio":"อัตราความเร็ว","Soft-start grade":"ระดับออกตัวนุ่ม","Logout time":"เวลาออกโหมด","Recovery time":"เวลาคืนโหมด","Low speed":"สปีดต่ำ","Mid speed":"สปีดกลาง","High speed":"สปีดสูง","Mid flux-weakening":"Flux-weak สปีดกลาง","High flux-weakening":"Flux-weak สปีดสูง","Low speed (2)":"สปีดต่ำ (2)","Mid speed (2)":"สปีดกลาง (2)","High speed (2)":"สปีดสูง (2)","Flux-weakening (2)":"Flux-weak (2)","Mid flux-weak (2)":"Flux-weak กลาง (2)","High flux-weak (2)":"Flux-weak สูง (2)","HDC lowest speed":"ความเร็วต่ำสุด HDC","Pole pairs":"จำนวนคู่ขั้ว","Hall shift angle":"มุมเลื่อนฮอลล์","Reverse speed limit":"จำกัดความเร็วถอยหลัง","EBS ratio":"อัตราเบรกไฟฟ้า (EBS)","Initial temperature":"อุณหภูมิเริ่มลดกำลัง","Over-temperature":"อุณหภูมิเกิน","Max temperature":"อุณหภูมิสูงสุด","Start voltage":"แรงดันเริ่ม","End voltage":"แรงดันสุด","Low protect":"ป้องกันต่ำ","High protect":"ป้องกันสูง","Start torque":"แรงบิดตอนออกตัว","Combinative torque":"แรงบิดรวม","Rate of rise":"อัตราเร่งคันเร่ง","Rate of decline":"อัตราลดคันเร่ง","Overcurrent":"กระแสเกิน","Overheating":"ร้อนเกิน","Hall fault":"ฮอลล์ผิดปกติ","Motor hall":"ฮอลล์มอเตอร์","Brake":"เบรก","Out of control":"ควบคุมไม่ได้","Controller failure":"กล่องผิดปกติ"};/*I18N-END*/
+/*I18N*/const I18N={"A Sport Arc":"A สปอร์ตอาร์ค","B Digital Race":"B ดิจิทัลเรซ","C Twin Gauge":"C เกจคู่","NO LINK":"ไม่มีสัญญาณ","FAULT":"ผิดปกติ","No fault":"ไม่มีข้อผิดพลาด","GPS only · %d sats · no controller":"GPS อย่างเดียว · %d ดวง · ไม่ได้ต่อกล่อง","Waiting for controller (%u baud)":"รอสัญญาณจากกล่อง (%u baud)","BATTERY":"แบตเตอรี่","REGEN":"ชาร์จกลับ","CURRENT":"กระแส","POWER":"กำลัง","CTRL":"กล่อง","MOTOR":"มอเตอร์","TRIP %.1f km   ODO %.0f km":"ทริป %.1f กม.   รวม %.0f กม.","TRIP %.1f km · ODO %.0f km":"ทริป %.1f กม. · รวม %.0f กม.","GEAR":"เกียร์","AMP":"แอมป์","VOLT":"โวลต์","TEMP":"อุณหภูมิ","ctrl/motor":"กล่อง/มอเตอร์","TRIP":"ทริป","ODO":"ระยะรวม","None":"ไม่มี","IDLE":"ว่าง","INIT":"เริ่มระบบ","START":"สตาร์ท","RUN":"วิ่ง","STOP":"หยุด","BRAKE":"เบรก","WAIT":"รอ","STYLE":"หน้าปัด","DRAG":"แดร็ก","LOG":"บันทึก","TUNE":"จูน","SETUP":"ตั้งค่า","< DASH":"< หน้าปัด","GPS: hold still for 1 s%s":"GPS: จอดนิ่ง 1 วินาที%s","Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)":"รอ GPS: %d ดวง ±%.1f กม./ชม. (ต้อง 6 ดวง, ±1.0)","HYBRID: launch from RPM, distance from GPS %.0f Hz%s":"ไฮบริด: ออกตัวจาก RPM ระยะจาก GPS %.0f Hz%s","GPS %.0f Hz · starts above 3 km/h%s":"GPS %.0f Hz · เริ่มนับเมื่อเกิน 3 กม./ชม.%s","GPS %.0f Hz · %d sats · ±%.1f km/h%s":"GPS %.0f Hz · %d ดวง · ±%.1f กม./ชม.%s","Bring the bike to a full stop (0 RPM)%s":"จอดรถให้นิ่งสนิท (0 RPM)%s","0 RPM · Timer starts when the wheel turns%s":"0 RPM · เริ่มจับเวลาทันทีที่ล้อหมุน%s","Press ARM, then launch from a standstill%s":"กด ARM แล้วออกตัวจากจุดหยุดนิ่ง%s"," · rollout 1 ft":" · rollout 1 ฟุต"," · 1 ft rollout":" · rollout 1 ฟุต","TIME":"เวลา","TRAP":"ความเร็วผ่าน","Δ BEST":"Δ ดีสุด","PEAK A":"กระแสสูงสุด","ABORT":"ยกเลิก","SPEED":"ความเร็ว","SPLIT":"ช่วง","Distance %.1f m  ·  %.0f A  ·  slip %.0f%%":"ระยะ %.1f ม.  ·  %.0f A  ·  ล้อฟรี %.0f%%","Distance %.1f m  ·  %.0f A  ·  %.1f kW":"ระยะ %.1f ม.  ·  %.0f A  ·  %.1f kW","Distance %.1f m  ·  GPS %d sats":"ระยะ %.1f ม.  ·  GPS %d ดวง","FINISHED":"เสร็จสิ้น","ARMED":"รอจอดนิ่ง","READY":"พร้อม","ABORTED":"ยกเลิกแล้ว","402 m @ %.1f km/h":"402 ม. @ %.1f กม./ชม.","★ NEW BEST %+.2f":"★ สถิติใหม่ %+.2f","★ NEW BEST":"★ สถิติใหม่","Run stopped before 402 m":"หยุดก่อนถึง 402 ม.","%s @ %.1f km/h":"%s @ %.1f กม./ชม.","Run stopped before %s · saved to history":"หยุดก่อนถึง %s · บันทึกในประวัติแล้ว","DIST":"ระยะ","Drag distance":"ระยะแดร็ก","Run distance":"ระยะวิ่ง","Drag history":"ประวัติการวิ่ง","All":"ทั้งหมด","stopped":"หยุดก่อน","Download CSV":"ดาวน์โหลด CSV","Best":"ดีที่สุด","No runs at this distance yet":"ยังไม่มีรอบที่ระยะนี้","Live: realtime":"สด: เรียลไทม์","Live: polling":"สด: ถามทีละครั้ง","This run":"รอบนี้","Peak %.0f A · %.1f kW · min %.1f V":"สูงสุด %.0f A · %.1f kW · ต่ำสุด %.1f V","no controller data":"ไม่มีข้อมูลจากกล่อง","GPS timing":"จับเวลาด้วย GPS","RPM timing ±0.05 s":"จับเวลาด้วย RPM ±0.05 วิ","SPIN-CORRECTED":"แก้ล้อฟรี","Not counted as best run":"ไม่นับเป็นรอบดีที่สุด","Max wheel slip %.0f%% (GPS)":"ล้อฟรีสูงสุด %.0f%% (GPS)","Wheel spin detected":"ตรวจพบล้อฟรี","EXIT":"ออก","HISTORY":"ประวัติ","WHEEL":"ล้อ","AGAIN":"อีกครั้ง","BEST RUN":"รอบดีที่สุด","No runs yet":"ยังไม่มีรอบวิ่ง","DISARM":"ยกเลิก ARM","DRAG HISTORY":"ประวัติแดร็ก","DATE":"วันที่","No runs saved yet":"ยังไม่มีผลที่บันทึก","SD card":"การ์ด SD","internal":"ภายใน","internal flash":"หน่วยความจำภายใน","Storage: %s · %u KB free of %u KB · rate %s":"ที่เก็บ: %s · ว่าง %u จาก %u KB · อัตรา %s","Storage: %s · %u KB free of %u KB · %u Hz":"ที่เก็บ: %s · ว่าง %u จาก %u KB · %u Hz","max":"สูงสุด","THIS TRIP":"ทริปนี้","km":"กม.","max km/h":"สูงสุด กม./ชม.","avg km/h":"เฉลี่ย กม./ชม.","max A":"สูงสุด A","TRIPS":"ทริปที่ผ่านมา","No trips recorded yet":"ยังไม่มีทริปที่บันทึก","GRAPH":"กราฟ","FAULTS":"ข้อผิดพลาด","NEW TRIP":"เริ่มทริปใหม่","last minutes · 1 point/s":"นาทีล่าสุด · 1 จุด/วินาที","Not enough data yet":"ข้อมูลยังไม่พอ","km/h (left)":"กม./ชม. (ซ้าย)","current A (right)":"กระแส A (ขวา)","FAULT LOG":"บันทึกข้อผิดพลาด","No faults recorded":"ไม่มีข้อผิดพลาด","cleared":"หายแล้ว","Now:":"ตอนนี้:","CLEAR FAULTS":"ล้างข้อผิดพลาด","TUNE CONTROLLER":"จูนกล่องคอนโทรล","Parameters read %s · check %05X":"อ่านค่าเมื่อ %s · ตรวจสอบ %05X","Backup #%u saved before any change · %d backups kept":"สำรองค่า #%u แล้ว · เก็บไว้ %d ชุด","No backup yet":"ยังไม่มีค่าสำรอง","Reading parameters...":"กำลังอ่านค่า...","Parameters not read yet":"ยังไม่ได้อ่านค่าพารามิเตอร์","Stop the bike, switch on, then press READ":"จอดรถ เปิดสวิตช์ แล้วกด อ่านค่า","LAUNCH PROFILE":"โปรไฟล์ออกตัว","Street / Launch throttle settings against wheel spin":"ค่าคันเร่ง ขับปกติ / ออกตัว ลดล้อฟรี","READING...":"กำลังอ่าน...","READ":"อ่านค่า","BACKUPS":"ค่าสำรอง","WRITE (%d)":"เขียนค่า (%d)","WRITE":"เขียนค่า","UP":"ขึ้น","DOWN":"ลง","was %s":"เดิม %s","UNDO":"คืนค่า","DONE":"เสร็จ","%d settings":"%d ค่า","%d settings · %d changed":"%d ค่า · แก้ %d","ADVANCED: ON":"ขั้นสูง: เปิด","ADVANCED: OFF":"ขั้นสูง: ปิด","WRITE PARAMETERS":"เขียนค่าลงกล่อง","These values will be written to the controller:":"ค่าต่อไปนี้จะถูกเขียนลงกล่อง:","+ %d more":"+ อีก %d ค่า","Bike stopped (0 RPM)":"รถจอดนิ่งแล้ว (0 RPM)","Stop the bike first: writing needs 0 RPM":"ต้องจอดรถก่อน: เขียนค่าได้เมื่อ 0 RPM","A backup of the current values is kept (#%u). Values are read back to verify.":"มีค่าสำรองเดิมแล้ว (#%u) และจะอ่านค่ากลับมาตรวจหลังเขียน","CANCEL":"ยกเลิก","WRITING...":"กำลังเขียน...","PARAMETER BACKUPS":"ค่าพารามิเตอร์สำรอง","Saved automatically on every read that differs from the last backup.":"บันทึกอัตโนมัติทุกครั้งที่อ่านค่าแล้วต่างจากชุดล่าสุด","No backups yet - press READ on the TUNE page":"ยังไม่มีค่าสำรอง - กด อ่านค่า ในหน้าจูน","check %05X":"ตรวจสอบ %05X","= controller":"= ค่าในกล่อง","RESTORE":"กู้คืน","Restore loads the backup, then WRITE asks for confirmation.":"กู้คืน = โหลดค่าสำรองมาแก้ไข แล้วกดเขียนค่าเพื่อยืนยัน","Read OK":"อ่านค่าสำเร็จ","No answer from controller":"กล่องไม่ตอบสนอง","Writing...":"กำลังเขียน...","Written and verified OK":"เขียนและตรวจสอบสำเร็จ","Read the parameters first":"ต้องอ่านค่าก่อน","No live data from controller":"ไม่มีข้อมูลจากกล่อง","Motor turning: stop the bike (0 RPM)":"มอเตอร์หมุนอยู่: จอดรถก่อน (0 RPM)","Written, but read-back failed":"เขียนแล้ว แต่อ่านกลับไม่สำเร็จ","Read-back differs: not all values accepted":"อ่านกลับไม่ตรง: กล่องไม่รับบางค่า","Controller did not accept the write":"กล่องไม่รับค่าที่เขียน","Lower throttle rise / start torque = less wheel spin at launch.":"ลด Rate of rise / Start torque = ล้อฟรีน้อยลงตอนออกตัว","STREET":"ขับปกติ","LAUNCH":"ออกตัว","NOW":"ปัจจุบัน","SAVE NOW AS STREET":"บันทึกเป็นขับปกติ","SAVE NOW AS LAUNCH":"บันทึกเป็นออกตัว","Apply = load into the editor, then confirm WRITE (backup kept).":"ใช้ = โหลดค่าเข้าตัวแก้ไข แล้วยืนยันเขียนค่า (มีค่าสำรอง)","Raw values as the PC tool shows them.":"เป็นค่าดิบแบบเดียวกับโปรแกรมในคอม","APPLY STREET":"ใช้ค่าขับปกติ","APPLY LAUNCH":"ใช้ค่าออกตัว","Dashboard":"หน้าปัด","Speed source":"แหล่งความเร็ว","Log rate":"อัตราบันทึก","Battery cells":"จำนวนเซลล์แบต","Cell empty/full":"แรงดันเซลล์ หมด/เต็ม","Gauge max km/h":"เกจสูงสุด กม./ชม.","Gauge max A":"เกจสูงสุด A","Backlight":"ความสว่างจอ","Wi-Fi hotspot":"ฮอตสปอต Wi-Fi","Time zone (UTC)":"เขตเวลา (UTC)","Drag rollout":"Rollout แดร็ก","GPS rate":"ความถี่ GPS","Max traction (spin)":"แรงยึดเกาะสูงสุด","Internet Wi-Fi":"Wi-Fi อินเทอร์เน็ต","Language":"ภาษา","ไทย":"ไทย","English":"English","AUTO":"อัตโนมัติ","MAX":"สูงสุด","ON":"เปิด","OFF":"ปิด","1 ft (strip)":"1 ฟุต (สนาม)","OFF (0 ft)":"ปิด (0 ฟุต)","set on web page":"ตั้งที่หน้าเว็บ","TOUCH CAL":"ปรับทัชสกรีน","tap to choose":"แตะเพื่อเลือก","WI-FI":"WI-FI อินเทอร์เน็ต","< WI-FI":"< WI-FI","Connected":"เชื่อมต่อแล้ว","connected":"เชื่อมต่อแล้ว","saved":"บันทึกไว้","Connecting...":"กำลังเชื่อมต่อ...","Cannot connect: check the password":"เชื่อมไม่ได้: ตรวจรหัสผ่าน","Not connected":"ยังไม่ได้เชื่อม","Tap a network below to join it":"แตะชื่อเครือข่ายด้านล่างเพื่อเชื่อม","Scanning...":"กำลังสแกน...","No networks found. Tap SCAN.":"ไม่พบเครือข่าย กดสแกน","SCAN":"สแกน","FORGET":"ลืมเครือข่าย","Password":"รหัสผ่าน","SHOW":"แสดง","HIDE":"ซ่อน","SPACE":"เว้นวรรค","CONNECT":"เชื่อมต่อ","DEL":"ลบ","SHIFT":"ตัวใหญ่","COLOURS":"สลับสีจอ","INFO":"ข้อมูล","Tyre width (mm)":"หน้ากว้างยาง (มม.)","Tyre aspect (%)":"ซีรีส์ยาง (%)","Rim (inch)":"ขอบล้อ (นิ้ว)","Correction (%)":"ปรับแก้ (%)","Gear ratio":"อัตราทด","WHEEL / SPEED":"ล้อ / ความเร็ว","circumference":"เส้นรอบวง","at 1000 rpm":"ที่ 1000 รอบ","Tip: ride 100 m":"เคล็ดลับ: ขี่ 100 ม.","between 2 marks and":"ระหว่าง 2 จุด แล้ว","adjust Correction":"ปรับแก้จน","until TRIP shows 0.10":"ทริปขึ้น 0.10","Speed = RPM / ratio x circumference. Hub motor: ratio 1.00":"ความเร็ว = รอบ / อัตราทด x เส้นรอบวง · ฮับมอเตอร์ = 1.00","Downloading %s... %d%%":"กำลังดาวน์โหลด %s... %d%%","Not checked yet":"ยังไม่ได้ตรวจ","Join a Wi-Fi network (web page > SETUP)":"ต่อ Wi-Fi ก่อน (หน้าเว็บ > ตั้งค่า)","Update":"อัปเดต","Firmware":"เฟิร์มแวร์","Last update":"อัปเดตล่าสุด","failed to start - previous version restored":"เปิดไม่สำเร็จ - กลับไปใช้เวอร์ชันเดิมแล้ว","Hotspot":"ฮอตสปอต","connecting...":"กำลังเชื่อมต่อ...","not set (web page > SETUP)":"ยังไม่ตั้ง (หน้าเว็บ > ตั้งค่า)","Internet":"อินเทอร์เน็ต","no data":"ไม่มีข้อมูล","Controller":"กล่องคอนโทรล","Frames":"เฟรม","fix":"จับสัญญาณได้","no fix":"ยังไม่จับสัญญาณ","not connected (optional)":"ไม่ได้ต่อ (ไม่บังคับ)","Storage":"ที่เก็บข้อมูล","Wiring":"การต่อสาย","CHECK FOR UPDATE":"ตรวจหาอัปเดต","INSTALL %s":"ติดตั้ง %s","INSTALL":"ติดตั้ง","Connecting to VOTOL controller...":"กำลังเชื่อมต่อกล่อง VOTOL...","%s · %u baud · %.1f Hz":"%s · %u baud · %.1f Hz","%u good · %u bad":"ดี %u · เสีย %u","%s · %u KB free · RAM %u KB":"%s · ว่าง %u KB · RAM %u KB","Up to date (%s)":"เป็นเวอร์ชันล่าสุดแล้ว (%s)","Version %s available":"มีเวอร์ชัน %s ใหม่","Cannot reach GitHub":"เชื่อมต่อ GitHub ไม่ได้","No internet Wi-Fi connection":"ไม่มีการเชื่อมต่ออินเทอร์เน็ต","Motor turning: stop the bike (0 RPM) to update":"มอเตอร์หมุนอยู่: จอดรถ (0 RPM) ก่อนอัปเดต","Drag run in progress":"กำลังจับเวลาแดร็ก","Too big for this board: install once with USB (FLASH .bat)":"ไฟล์ใหญ่เกินพื้นที่เดิม: แฟลชผ่าน USB 1 ครั้ง (FLASH .bat)","Download failed (%s)":"ดาวน์โหลดไม่สำเร็จ (%s)","Download interrupted":"ดาวน์โหลดขาดหาย","Checksum mismatch - not installed":"ไฟล์ไม่ตรง (checksum) - ไม่ได้ติดตั้ง","Install failed":"ติดตั้งไม่สำเร็จ","Installed %s - restarting":"ติดตั้ง %s แล้ว - กำลังรีสตาร์ต","version.json not found":"ไม่พบ version.json","Bad version.json":"version.json ไม่ถูกต้อง","Battery":"แบตเตอรี่","Sport":"สปอร์ต","3-Speed":"3 สปีด","Motor":"มอเตอร์","Temperature":"อุณหภูมิ","Throttle":"คันเร่ง","Overvoltage":"แรงดันเกิน","Undervoltage":"แรงดันต่ำ","Soft undervoltage":"แรงดันต่ำ (เริ่มลดกำลัง)","Undervoltage variation":"ช่วงแรงดันต่ำ","Busbar current":"กระแสแบต (บัส)","Phase current":"กระแสเฟส","Sport current limit":"กระแสโหมดสปอร์ต","Sport flux-weakening":"Flux-weakening สปอร์ต","Flux-weak compensation":"ชดเชย Flux-weak","Speed ratio":"อัตราความเร็ว","Soft-start grade":"ระดับออกตัวนุ่ม","Logout time":"เวลาออกโหมด","Recovery time":"เวลาคืนโหมด","Low speed":"สปีดต่ำ","Mid speed":"สปีดกลาง","High speed":"สปีดสูง","Mid flux-weakening":"Flux-weak สปีดกลาง","High flux-weakening":"Flux-weak สปีดสูง","Low speed (2)":"สปีดต่ำ (2)","Mid speed (2)":"สปีดกลาง (2)","High speed (2)":"สปีดสูง (2)","Flux-weakening (2)":"Flux-weak (2)","Mid flux-weak (2)":"Flux-weak กลาง (2)","High flux-weak (2)":"Flux-weak สูง (2)","HDC lowest speed":"ความเร็วต่ำสุด HDC","Pole pairs":"จำนวนคู่ขั้ว","Hall shift angle":"มุมเลื่อนฮอลล์","Reverse speed limit":"จำกัดความเร็วถอยหลัง","EBS ratio":"อัตราเบรกไฟฟ้า (EBS)","Initial temperature":"อุณหภูมิเริ่มลดกำลัง","Over-temperature":"อุณหภูมิเกิน","Max temperature":"อุณหภูมิสูงสุด","Start voltage":"แรงดันเริ่ม","End voltage":"แรงดันสุด","Low protect":"ป้องกันต่ำ","High protect":"ป้องกันสูง","Start torque":"แรงบิดตอนออกตัว","Combinative torque":"แรงบิดรวม","Rate of rise":"อัตราเร่งคันเร่ง","Rate of decline":"อัตราลดคันเร่ง","Overcurrent":"กระแสเกิน","Overheating":"ร้อนเกิน","Hall fault":"ฮอลล์ผิดปกติ","Motor hall":"ฮอลล์มอเตอร์","Brake":"เบรก","Out of control":"ควบคุมไม่ได้","Controller failure":"กล่องผิดปกติ"};/*I18N-END*/
 const WEB={"DASH":"หน้าปัด","Power":"กำลัง","Ctrl":"กล่อง","Current":"กระแส","Regen":"ชาร์จกลับ","Speed":"ความเร็ว","Split":"ช่วง","Time":"เวลา","Trap":"ความเร็วผ่าน","Δ best":"Δ ดีสุด","Peak A":"กระแสสูงสุด",
 "History":"ประวัติ","Date":"วันที่","This trip":"ทริปนี้","Speed & current (1 point / s)":"ความเร็วและกระแส (1 จุด / วินาที)","km/h":"กม./ชม.","current A":"กระแส A","Trips":"ทริปที่ผ่านมา","Start":"เริ่ม","Max":"สูงสุด","Max A":"สูงสุด A",
 "Faults":"ข้อผิดพลาด","Fault":"ข้อผิดพลาด","Files (CSV opens in Excel)":"ไฟล์ (CSV เปิดด้วย Excel ได้)","UNDO ALL":"คืนค่าทั้งหมด","Launch profile (against wheel spin)":"โปรไฟล์ออกตัว (ลดล้อฟรี)",
@@ -119,7 +246,7 @@ const WEB={"DASH":"หน้าปัด","Power":"กำลัง","Ctrl":"ก�
 "Setting":"ค่า","Now":"ปัจจุบัน","Street":"ขับปกติ","Launch":"ออกตัว","Backups (saved automatically on every new read)":"ค่าสำรอง (บันทึกอัตโนมัติทุกครั้งที่อ่านค่าใหม่)",
 "Internet Wi-Fi (for updates)":"Wi-Fi อินเทอร์เน็ต (สำหรับอัปเดต)","Internet Wi-Fi":"Wi-Fi อินเทอร์เน็ต","Nearby networks":"เครือข่ายใกล้เคียง","Bluetooth always on":"เปิด Bluetooth ตลอดเวลา","Connect from voltol.battlab.net at any time · changes need a PAIR code":"เชื่อมจาก voltol.battlab.net ได้ทุกเมื่อ · การแก้ค่าต้องใช้รหัสจากปุ่มจับคู่","Bluetooth only runs during pairing (3 minutes)":"Bluetooth ทำงานเฉพาะตอนจับคู่ (3 นาที)","SCAN":"ค้นหา","ADD":"เพิ่ม","REMOVE":"ลบ","Up to 8 networks (home, shop, phone hotspot). The module tries them in turn; this hotspot stays on.":"บันทึกได้ 8 เครือข่าย (บ้าน ร้าน ฮอตสปอตมือถือ) โมดูลจะลองต่อทีละวง และฮอตสปอตของโมดูลยังเปิดอยู่ตลอด","Not connected - trying saved networks (paused while a phone uses this hotspot)":"ยังไม่ได้ต่อ - กำลังลองเครือข่ายที่บันทึกไว้ (หยุดลองชั่วคราวระหว่างมีมือถือต่อฮอตสปอตนี้)","No internet Wi-Fi saved yet":"ยังไม่ได้บันทึก Wi-Fi อินเทอร์เน็ต","Remove %s?":"ลบ %s ?","VOLTOL Cloud":"VOLTOL Cloud","PAIR":"จับคู่","Online":"ออนไลน์","Paired · waiting for internet":"จับคู่แล้ว · รออินเทอร์เน็ต","Not paired":"ยังไม่จับคู่","Bluetooth setup open · %d s":"เปิดจับคู่ Bluetooth · เหลือ %d วินาที","Last upload: HTTP %d":"ส่งข้อมูลล่าสุด: HTTP %d","Press PAIR, then open the link on your phone":"กด จับคู่ แล้วเปิดลิงก์บนมือถือ","Open this link on your phone (signed in to BATTLAB), then choose VOLTOL Setup over Bluetooth:":"เปิดลิงก์นี้บนมือถือ (ล็อกอิน BATTLAB ไว้) แล้วเลือก VOLTOL Setup ทาง Bluetooth:","Valid for 3 minutes":"ใช้ได้ 3 นาที","Wi-Fi name":"ชื่อ Wi-Fi","Password":"รหัสผ่าน","SAVE":"บันทึก","CHECK":"ตรวจสอบ","Device":"อุปกรณ์","Firmware file update":"อัปเดตเฟิร์มแวร์จากไฟล์","UPLOAD":"อัปโหลด",
 "Use the *_APP_UPDATE.bin file. Settings, logs and backups are kept.":"ใช้ไฟล์ *_APP_UPDATE.bin · ค่าตั้ง บันทึก และค่าสำรองยังอยู่ครบ","Write parameters to the controller":"เขียนค่าพารามิเตอร์ลงกล่อง",
-"OFFLINE":"ออฟไลน์","GPS":"GPS","rpm":"รอบ","GPS %d sats":"GPS %d ดวง","GPS only":"GPS อย่างเดียว","waiting for controller":"รอสัญญาณจากกล่อง","FAULT: %s":"ผิดปกติ: %s",
+"OFFLINE":"ออฟไลน์","TIME":"เวลา","Throttle":"คันเร่ง","Best":"รอบดีที่สุด","Throttle search":"ค้นหาคันเร่ง","The trace of a run shows here":"กราฟของรอบวิ่งจะขึ้นที่นี่","Throttle search: yellow = byte 9 · purple = byte 18 · pink = byte 19":"ค้นหาคันเร่ง: เหลือง = ไบต์ 9 · ม่วง = ไบต์ 18 · ชมพู = ไบต์ 19 · เส้นไหนขึ้นลงตามการบิดคันเร่ง แจ้งผู้ดูแลได้เลย","Throttle channel not known yet: turn on Throttle search and twist the throttle with the wheel off the ground":"ยังไม่ทราบช่องคันเร่ง · เปิด ค้นหาคันเร่ง แล้วบิดคันเร่งช้า ๆ ตอนล้อลอย","GPS":"GPS","rpm":"รอบ","GPS %d sats":"GPS %d ดวง","GPS only":"GPS อย่างเดียว","waiting for controller":"รอสัญญาณจากกล่อง","FAULT: %s":"ผิดปกติ: %s",
 "%.0f Hz · %d baud":"%.0f Hz · %d baud","ARM":"ARM","Press ARM, then launch from a standstill":"กด ARM แล้วออกตัวจากจุดหยุดนิ่ง","GPS: hold still for 1 s":"GPS: จอดนิ่ง 1 วินาที",
 "Bring the bike to a full stop (0 RPM)":"จอดรถให้นิ่งสนิท (0 RPM)","HYBRID: launch from RPM, distance from GPS":"ไฮบริด: ออกตัวจาก RPM ระยะจาก GPS","READY · starts above 3 km/h":"พร้อม · เริ่มนับเมื่อเกิน 3 กม./ชม.",
 "READY · timer starts when the wheel turns":"พร้อม · เริ่มจับเวลาทันทีที่ล้อหมุน","Distance %.1f m":"ระยะ %.1f ม."," · slip %.0f%%":" · ล้อฟรี %.0f%%"," · peak %.0f A":" · สูงสุด %.0f A",
@@ -196,25 +323,162 @@ function renderDashDrag(){const d=L.drag;if(!d)return;const n=['RUN','DONE','ABO
   $('dashDrag').innerHTML=`<div class="row" style="gap:12px;align-items:flex-start"><div><div class="l" style="margin:0" data-i="Run distance">${t('Run distance')}</div><div class="v ye" style="font-size:20px">${t(SN[n-1])}</div></div>`+
     cell(t(d.state=='RUN'?'RUN':'This run'),d.sp)+cell(t('Best'),d.haveBest&&(d.bestN||4)==n?d.best:null)+'</div>'}
 $('dashDrag').onclick=()=>document.querySelector('#nav button[data-t="drag"]').click();
-function renderDrag(){const d=L.drag;const st=$('dState');const ran=['RUN','DONE','ABORTED'].includes(d.state);const n=ran?(d.n||4):[3,4,5][d.target??1];
-  document.querySelectorAll('#tgtSeg button').forEach(b=>{b.classList.toggle('on',+b.dataset.g===(d.target??1));b.disabled=d.state=='RUN'});st.textContent=t(d.state=='DONE'?'FINISHED':d.state);st.className='pill '+({READY:'gr',RUN:'ye',ARMED:'ye',DONE:'bl',ABORTED:'re'}[d.state]||'mut');
-  $('dTime').textContent=f2(d.el);$('dSpd').textContent=f1(d.state=='RUN'?d.spd:(L.speedOk?L.kmh:0));
+// ---------- drag: Telemetry Trace (same look as the cloud page). Live samples come from the
+// stream; a finished run's full 0.05 s trace is read from the board (/tr/<run id>.bin).
+const MT={axis:'d',on:{kmh:true,amp:true,thr:true,rpm:false,best:true,raw:false},sel:null,traces:new Map(),loading:new Set(),
+  live:[],liveRid:'',zoom:{a:0,b:1},armAt:0,thrIndex:null,tEnd:1,samples:[],drawnKey:''};
+const MSPL=[[18.288,'60 ft'],[100,'100 m'],[201.168,'201 m'],[402.336,'402 m'],[1000,'1000 m']];
+const mtTargetOf=g=>[201.168,402.336,1000][g??1];
+const mtN=m=>m>=999?5:m>=402?4:3;
+function mtFresh(d){return d&&(d.state=='ARMED'||d.state=='READY'||(MT.armAt&&Date.now()-MT.armAt<8000&&d.state!='RUN'))}
+function mtAlign(s,rid,t60){
+  let off=0;
+  if(t60>0){const k=s.findIndex(x=>x.d>=18.288);if(k>0){const a=s[k-1],b=s[k],ms=a.ms+(b.ms-a.ms)*(18.288-a.d)/Math.max(1e-6,b.d-a.d);off=t60-(ms-rid)/1000}}
+  for(const x of s)x.t=(x.ms-rid)/1000+off;
+  return s.filter(x=>x.t>=-0.3);
+}
+async function mtLoad(rid,t60){
+  if(!rid||rid=='0'||MT.traces.has(rid)||MT.loading.has(rid))return;
+  MT.loading.add(rid);
+  try{const r=await fetch('/dl?f=/tr/'+rid+'.bin');if(!r.ok){MT.traces.set(rid,[]);return}
+    const b=await r.arrayBuffer(),v=new DataView(b),n=Math.floor(b.byteLength/20),s=[];
+    for(let i=0;i<n;i++){const o=i*20;s.push({ms:v.getUint32(o,true),d:v.getFloat32(o+4,true),kmh:v.getUint16(o+8,true)/10,a:v.getInt16(o+10,true)/10,
+      rpm:v.getUint16(o+12,true),v:v.getUint16(o+14,true)/10,raw:[v.getUint8(o+16),v.getUint8(o+17),v.getUint8(o+18)]})}
+    MT.traces.set(rid,mtAlign(s,+rid,t60));renderDrag();
+  }catch(e){}finally{MT.loading.delete(rid)}
+}
+function mtLive(){  // collect live samples of the current run from the stream
+  const d=L.drag;if(!d)return;
+  if(d.state=='RUN'){
+    if(d.rid!==MT.liveRid){MT.liveRid=d.rid;MT.live=[];MT.sel=null;MT.zoom={a:0,b:1}}
+    const last=MT.live[MT.live.length-1];
+    if(!last||d.el>last.t)MT.live.push({t:d.el,d:d.dist,kmh:d.spd||L.kmh,a:L.amp,rpm:L.rpm,v:L.volt,raw:L.raw||[-1,-1,-1]});
+  }
+}
+function mtRunsAll(){
+  // history rows of the board (newest first) + the run in progress
+  const rows=RUNS.map(r=>({rid:String(r.rid||''),when:r.when,n:r.n||4,done:r.done!==false,t:r.t,v:r.v}));
+  return rows;
+}
+function mtBest(rows,n){let b=null;for(const r of rows){if(!r.done||r.n!=n)continue;const t=r.t[n-1];if(t>0&&(!b||t<b.t[n-1]))b=r}return b}
+function renderDrag(){const d=L.drag;if(!d)return;
+  mtLive();
+  const fresh=mtFresh(d), running=d.state=='RUN';
+  const n=['RUN','DONE','ABORTED'].includes(d.state)?(d.n||4):[3,4,5][d.target??1], target=MSPL[n-1][0];
+  document.querySelectorAll('#tgtSeg button').forEach(b=>{b.classList.toggle('on',+b.dataset.g===(d.target??1));b.setAttribute('aria-pressed',String(+b.dataset.g===(d.target??1)));b.disabled=running});
+  $('ttTitle').textContent=(n==5?'1,000':MSPL[n-1][1].replace(' m',''))+' m';
+  const st=fresh&&d.state=='IDLE'?'ARMED':d.state;$('ttBar').dataset.state=st;
+  $('ttCode').textContent={RUN:'LIVE RUN',DONE:'FINISH',ARMED:'ARMED',READY:'READY',ABORTED:'STOPPED',IDLE:'IDLE'}[st]||'STANDBY';
   $('dSrc').textContent=(d.gps?tf('GPS %.0f Hz · %d sats · ±%.1f km/h',L.gps.hz,L.gps.sats,L.gps.acc):tf('RPM %.0f Hz',L.hz))+(d.roll?t(' · rollout 1 ft'):'');
+  // big numbers: zero after ARM, live while running, result when done
+  const el=fresh?0:d.el, dist=fresh?0:d.dist;
+  $('dTime').textContent=(+el).toFixed(3);
+  $('dSpd').textContent=f1(running?d.spd:(L.speedOk?L.kmh:0));
+  $('dDist').textContent=f1(Math.min(dist,target*1.05))+' m';
+  $('dProg').style.width=Math.max(0,Math.min(100,dist/target*100))+'%';
+  $('dRpm').textContent=L.linked?L.rpm:'—';$('dAmp').textContent=L.linked?L.amp.toFixed(0)+' A':'—';$('dVolt').textContent=L.linked?f1(L.volt)+' V':'—';
   const hint={IDLE:t('Press ARM, then launch from a standstill'),ARMED:d.wait?tf('Waiting for GPS: %d sats, ±%.1f km/h (need 6+, ±1.0)',L.gps.sats,L.gps.acc):t(d.gps?'GPS: hold still for 1 s':'Bring the bike to a full stop (0 RPM)'),
-    READY:t(d.hybrid?'HYBRID: launch from RPM, distance from GPS':d.gps?'READY · starts above 3 km/h':'READY · timer starts when the wheel turns'),RUN:tf('Distance %.1f m',d.dist)+(d.slipOk?tf(' · slip %.0f%%',d.slip):''),DONE:d.sp[n-1].done?tf('%s @ %.1f km/h',t(SN[n-1]),d.sp[n-1].v)+(d.peakA?tf(' · peak %.0f A',d.peakA):''):'',ABORTED:tf('Run stopped before %s · saved to history',t(SN[n-1]))}[d.state];
+    READY:t(d.hybrid?'HYBRID: launch from RPM, distance from GPS':d.gps?'READY · starts above 3 km/h':'READY · timer starts when the wheel turns'),RUN:tf('Distance %.1f m',d.dist)+(d.slipOk?tf(' · slip %.0f%%',d.slip):''),
+    DONE:d.sp[n-1]&&d.sp[n-1].done?tf('%s @ %.1f km/h',t(SN[n-1]),d.sp[n-1].v)+(d.peakA?tf(' · peak %.0f A',d.peakA):''):'',ABORTED:tf('Run stopped before %s · saved to history',t(SN[n-1]))}[fresh&&d.state=='IDLE'?'ARMED':d.state]||'';
   const tail=d.state=='DONE'?(d.spinCorr?t(' · SPIN-CORRECTED (not counted as best)'):d.maxSlip>5?tf(' · max wheel slip %.0f%%',d.maxSlip):d.spin?t(' · wheel spin detected'):''):'';
-  $('dHint').textContent=hint+tail;$('dHint').className=d.wait?'ye':(d.spinCorr&&d.state=='DONE'?'re':'sub');
-  const E=SM[n-1],N=SN;let s=`<rect x="0" y="8" width="460" height="8" rx="4" fill="#18212B"/><rect x="0" y="8" width="${Math.max(0,Math.min(460,460*d.dist/E))}" height="8" rx="4" fill="#00E08A"/>`;let lx=1e9;
-  for(let i=n-1;i>=0;i--){const x=Math.min(458,460*SM[i]/E);s+=`<rect x="${x-1}" y="4" width="2" height="16" fill="#9AA7B3"/>`;if(i==n-1||lx-x>=40){s+=`<text x="${Math.min(440,Math.max(12,x))}" y="32" fill="#6E7C89" font-size="10" text-anchor="middle">${N[i]}</text>`;lx=x}}$('dTrack').innerHTML=s;
-  const peak=d.peakA>0;$('pkH').style.display=peak?'':'none';
-  $('dRows').innerHTML=d.sp.slice(0,n).map((x,i)=>{const b=d.haveBest&&d.best[i]&&d.best[i].done&&(d.bestN||4)==n?x.t-d.best[i].t:null;return `<tr><td>${N[i]}</td><td><b>${x.done?f2(x.t)+' s':'—'}</b></td><td>${x.done?f1(x.v)+' km/h':'—'}</td><td class="${b<=0?'gr':'re'}">${x.done&&b!==null?(b>0?'+':'')+f2(b):''}</td><td style="display:${peak?'':'none'}">${x.done?x.a.toFixed(0)+' A':''}</td></tr>`}).join('');
-  const armed=['ARMED','READY','RUN'].includes(d.state);const b=$('dArm');b.textContent=t(d.state=='RUN'?'ABORT':armed?'DISARM':(d.state=='DONE'||d.state=='ABORTED'?'AGAIN':'ARM'));b.className='btn '+(d.state=='RUN'?'r':armed?'':'g')}
+  $('dHint').textContent=hint+tail;
+  // which run is drawn: the one tapped in the log, else the live / last run
+  const rows=mtRunsAll();
+  const sel=MT.sel?rows.find(r=>r.rid===MT.sel):null;
+  const best=mtBest(rows,n);
+  let splits, samples=[], rid='', label='';
+  if(sel){splits=sel.t.map((x,i)=>({done:x>0,t:x,v:sel.v[i]}));rid=sel.rid;label=sel.when+(sel.t[sel.n-1]>0?' · '+sel.t[sel.n-1].toFixed(3)+' s':'');
+    samples=MT.traces.get(rid)||[];mtLoad(rid,sel.t[0]);}
+  else if(fresh){splits=[];label=t('ARMED')}
+  else{splits=d.sp;rid=d.rid||'';
+    if(running)samples=MT.live,label=t('This run')+' (live)';
+    else{const full=MT.traces.get(rid);samples=full&&full.length?full:(rid===MT.liveRid?MT.live:[]);
+      if(['DONE','ABORTED'].includes(d.state))mtLoad(rid,d.sp[0]&&d.sp[0].done?d.sp[0].t:0);
+      label=['DONE','ABORTED'].includes(d.state)?t('This run')+(d.el>0?' · '+(+d.el).toFixed(3)+' s':''):'—';}}
+  $('ttRunLabel').textContent=label;
+  // timing tower with the gap to the best run of this distance
+  const bt=best&&best!==sel?best.t:null;
+  const tw=MSPL.slice(0,n).map(([m,nm],i)=>{const s=splits[i],done=!!(s&&s.done&&s.t>0);const dl=done&&bt&&bt[i]>0?s.t-bt[i]:null;
+    return '<li data-done="'+done+'"><b>'+nm+'</b><div><strong>'+(done?s.t.toFixed(3):'—.———')+'</strong><small>'+(done&&s.v>0?s.v.toFixed(1)+' km/h':'')+(done&&s.a>0?' · '+s.a.toFixed(0)+' A':'')+'</small></div><em>'+(dl==null?'':(dl<=0?'−':'+')+Math.abs(dl).toFixed(2))+'</em></li>'}).join('');
+  if($('ttTower').dataset.h!==tw){$('ttTower').dataset.h=tw;$('ttTower').innerHTML=tw}
+  // best trace (dashed)
+  let bs=[];if(MT.on.best&&best&&best.rid&&best.rid!==rid){bs=MT.traces.get(best.rid)||[];mtLoad(best.rid,best.t[0])}
+  MT.samples=samples;
+  mtChart(samples,bs,splits,target,n,rid);
+  const last=samples[samples.length-1];
+  $('dThr').textContent=MT.thrIndex!=null&&last?(last.raw[MT.thrIndex]/2.55).toFixed(0)+' %':'—';
+  mtChips(rows,rid,best&&best.rid);
+  const armed=['ARMED','READY','RUN'].includes(d.state);const b=$('dArm');b.textContent=t(d.state=='RUN'?'ABORT':armed?'DISARM':(d.state=='DONE'||d.state=='ABORTED'?'AGAIN':'ARM'));b.className=d.state=='RUN'?'r':armed?'n':'';
+}
+function mtChips(rows,rid,bestRid){
+  const h=rows.slice(0,40).map(r=>{const k=(()=>{let j=-1;r.t.forEach((x,i)=>{if(x>0)j=i});return j})();
+    return '<button type="button" data-rid="'+r.rid+'" aria-pressed="'+(r.rid&&r.rid===rid)+'"'+(r.rid&&r.rid!='0'?'':' disabled')+'><small>'+r.when+'</small><small class="'+(r.rid===bestRid?'best':'')+'">'+t(SN[r.n-1])+(r.rid===bestRid?' · ★':'')+(r.done?'':' · '+t('stopped'))+'</small><strong>'+(k>=0?r.t[k].toFixed(3):'—')+'</strong></button>'}).join('');
+  if($('ttRuns').dataset.h!==h){$('ttRuns').dataset.h=h;$('ttRuns').innerHTML=h}
+}
+function mtChart(s,bs,splits,target,n,rid){
+  const svg=$('ttSvg'),W=760,H=330,axis=MT.axis;
+  const tEnd=Math.max(1,...s.map(x=>x.t),...bs.map(x=>x.t))*1.03;MT.tEnd=tEnd;
+  const za=MT.zoom.a,zb=MT.zoom.b,zf=f=>(f-za)/(zb-za)*W;
+  const X=axis=='d'?(x=>zf(x.d/target)):(x=>zf(x.t/tEnd));
+  const pts=s.filter(x=>axis=='t'||x.d<=target*1.01), bp=bs.filter(x=>axis=='t'||x.d<=target*1.01);
+  const vMax=Math.max(120,...pts.map(x=>x.kmh),...bp.map(x=>x.kmh))*1.08,aMax=Math.max(100,...pts.map(x=>x.a))*1.1,rMax=Math.max(1000,...pts.map(x=>x.rpm))*1.08;
+  const line=(a,fy)=>a.length?'M'+a.map(x=>X(x).toFixed(1)+' '+fy(x).toFixed(1)).join('L'):'';
+  const yV=x=>H-8-x.kmh/vMax*(H-30),yA=x=>H-8-Math.max(0,x.a)/aMax*(H-30),yR=x=>H-8-x.rpm/rMax*(H-30);
+  let marks='',lab='';
+  MSPL.slice(0,n).forEach(([m,nm],i)=>{const sp=splits&&splits[i],hit=!!(sp&&sp.done&&sp.t>0);
+    const x=axis=='d'?zf(m/target):(hit?zf(sp.t/tEnd):null);if(x==null||x<-2||x>W+2)return;
+    marks+='<path d="M'+x.toFixed(1)+' 0V'+H+'" stroke="'+(hit?'#3cc8f0':'#3a4048')+'" stroke-dasharray="3 4" fill="none" vector-effect="non-scaling-stroke"/>';
+    lab+='<span data-hit="'+hit+'" style="left:'+Math.min(96,Math.max(4,x/W*100)).toFixed(2)+'%">'+nm+(hit?' '+sp.t.toFixed(2):'')+'</span>'});
+  const key=rid+'|'+axis,fresh=key!==MT.drawnKey;MT.drawnKey=key;
+  const path=(d,c,w)=>d?'<path class="'+(fresh?'tt-trace-new':'')+'" d="'+d+'" fill="none" stroke="'+c+'" stroke-width="'+w+'" stroke-linejoin="round" vector-effect="non-scaling-stroke" '+(fresh?'pathLength="1000" style="--len:1000;stroke-dasharray:1000"':'')+'/>':'';
+  svg.innerHTML=marks+(MT.on.best&&bp.length?'<path d="'+line(bp,yV)+'" fill="none" stroke="#5b636e" stroke-width="1.6" stroke-dasharray="5 5" vector-effect="non-scaling-stroke"/>':'')+
+    (MT.on.rpm?path(line(pts,yR),'#3cc8f0',1.6):'')+(MT.on.amp?path(line(pts,yA),'#ff6a1a',2):'')+(MT.on.kmh?path(line(pts,yV),'#3ee08f',2.6):'');
+  $('ttMarks').innerHTML=lab;$('ttEmpty').hidden=pts.length>1;
+  const axl=f=>axis=='d'?(f*target).toFixed(zb-za<0.5&&f*target<100?1:0)+' m':(f*tEnd).toFixed(zb-za<0.5?2:1)+' s';
+  $('ttAx0').textContent=axl(za);$('ttAx1').textContent=axl((za+zb)/2);$('ttAx2').textContent=axl(zb);
+  $('ttZoomLabel').textContent=zb-za<0.999?'×'+(1/(zb-za)).toFixed(1):'';
+  let th='';const thr=$('ttThrSvg');
+  if(MT.on.raw&&pts.length>1){['#f5d24b','#b98cff','#ff8fb1'].forEach((c,k)=>{th+='<path d="'+line(pts.filter(x=>x.raw[k]>=0),x=>66-x.raw[k]/255*62)+'" fill="none" stroke="'+c+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/>'});
+    $('ttThrNote').textContent=t('Throttle search: yellow = byte 9 · purple = byte 18 · pink = byte 19');}
+  else if(MT.thrIndex!=null&&MT.on.thr&&pts.length>1){th='<path d="'+line(pts,x=>66-x.raw[MT.thrIndex]/255*62)+'" fill="none" stroke="#b98cff" stroke-width="2" vector-effect="non-scaling-stroke"/>'}
+  else $('ttThrNote').textContent=t('Throttle channel not known yet: turn on Throttle search and twist the throttle with the wheel off the ground');
+  thr.innerHTML=th;
+}
+function mtHover(ev){const box=$('ttChartBox'),hv=$('ttHover'),s=MT.samples;if(!s.length){hv.hidden=true;return}
+  const r=box.getBoundingClientRect(),fx=(ev.clientX-r.left)/r.width,f=MT.zoom.a+fx*(MT.zoom.b-MT.zoom.a);
+  const n=L.drag?(['RUN','DONE','ABORTED'].includes(L.drag.state)?(L.drag.n||4):[3,4,5][L.drag.target??1]):4,target=MSPL[n-1][0];
+  const want=MT.axis=='d'?f*target:f*MT.tEnd;let b=s[0];for(const x of s)if(Math.abs((MT.axis=='d'?x.d:x.t)-want)<Math.abs((MT.axis=='d'?b.d:b.t)-want))b=x;
+  hv.hidden=false;hv.style.left=Math.min(r.width-170,Math.max(4,ev.clientX-r.left+12))+'px';
+  hv.innerHTML=b.t.toFixed(2)+' s · '+b.d.toFixed(1)+' m<br><span style="color:#3ee08f">'+b.kmh.toFixed(1)+' km/h</span> · <span style="color:#ff6a1a">'+b.a.toFixed(0)+' A</span><br>'+b.rpm+' rpm · '+b.v.toFixed(1)+' V'}
+function mtZoomTo(a,b){const span=Math.max(0.02,Math.min(1,b-a));if(a<0)a=0;if(a+span>1)a=1-span;MT.zoom={a:Math.max(0,a),b:Math.max(0,a)+span};renderDrag()}
+function mtZoomBy(k,cf){const z=MT.zoom,c=z.a+(cf??0.5)*(z.b-z.a),span=(z.b-z.a)/k;mtZoomTo(c-(cf??0.5)*span,c-(cf??0.5)*span+span)}
+(function(){const box=$('ttChartBox'),pts=new Map();let pan=null,pinch=null;
+  const fxOf=e=>{const r=box.getBoundingClientRect();return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))};
+  box.addEventListener('wheel',e=>{e.preventDefault();mtZoomBy(e.deltaY<0?1.25:0.8,fxOf(e))},{passive:false});
+  box.addEventListener('dblclick',()=>mtZoomTo(0,1));
+  box.addEventListener('pointerdown',e=>{box.setPointerCapture(e.pointerId);pts.set(e.pointerId,e.clientX);
+    if(pts.size==1)pan={x:e.clientX,z:{...MT.zoom}};
+    if(pts.size==2){const xs=[...pts.values()];pinch={d:Math.abs(xs[0]-xs[1])||1,z:{...MT.zoom},c:fxOf({clientX:(xs[0]+xs[1])/2})};pan=null}});
+  box.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId)){mtHover(e);return}pts.set(e.pointerId,e.clientX);const w=box.getBoundingClientRect().width;
+    if(pinch&&pts.size>=2){const xs=[...pts.values()],d=Math.abs(xs[0]-xs[1])||1,span=(pinch.z.b-pinch.z.a)/(d/pinch.d),c=pinch.z.a+pinch.c*(pinch.z.b-pinch.z.a);mtZoomTo(c-pinch.c*span,c-pinch.c*span+span)}
+    else if(pan){const df=(e.clientX-pan.x)/w*(pan.z.b-pan.z.a);if(Math.abs(e.clientX-pan.x)>3){$('ttHover').hidden=true;mtZoomTo(pan.z.a-df,pan.z.b-df)}else mtHover(e)}});
+  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size)pan=null};
+  box.addEventListener('pointerup',up);box.addEventListener('pointercancel',up);box.addEventListener('pointerleave',()=>{$('ttHover').hidden=true});
+  $('ttZoomIn').onclick=()=>mtZoomBy(1.6);$('ttZoomOut').onclick=()=>mtZoomBy(1/1.6);$('ttZoomReset').onclick=()=>mtZoomTo(0,1);
+  $('ttFull').onclick=()=>{const m=$('ttMain'),on=!m.classList.contains('tt-max');m.classList.toggle('tt-max',on);$('ttFull').setAttribute('aria-pressed',String(on));document.body.style.overflow=on?'hidden':'';renderDrag()};
+  document.addEventListener('keydown',e=>{if(e.key=='Escape'&&$('ttMain').classList.contains('tt-max'))$('ttFull').click()});
+  document.querySelectorAll('#t-drag .tt-axis button').forEach(b=>b.onclick=()=>{MT.axis=b.dataset.axis;document.querySelectorAll('#t-drag .tt-axis button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));MT.zoom={a:0,b:1};renderDrag()});
+  document.querySelectorAll('#t-drag .tt-legend button').forEach(b=>b.onclick=()=>{MT.on[b.dataset.s]=!MT.on[b.dataset.s];b.setAttribute('aria-pressed',String(MT.on[b.dataset.s]));MT.drawnKey='';renderDrag()});
+  $('ttRuns').addEventListener('click',e=>{const b=e.target.closest('button[data-rid]');if(!b)return;MT.sel=MT.sel===b.dataset.rid?null:b.dataset.rid;MT.zoom={a:0,b:1};renderDrag()});
+})();
 document.querySelectorAll('#tgtSeg button').forEach(b=>b.onclick=()=>api('/api/set',{k:'dragTarget',v:b.dataset.g}).then(()=>{if(L.drag){L.drag.target=+b.dataset.g;renderDrag()}}));
 let HF='a',RUNS=[];document.querySelectorAll('#histSeg button').forEach(b=>b.onclick=()=>{HF=b.dataset.h;document.querySelectorAll('#histSeg button').forEach(x=>x.classList.toggle('on',x===b));renderRuns()});
-async function runs(){try{RUNS=await api('/api/runs')}catch(e){RUNS=LS.runs||[]}renderRuns()}
+async function runs(){try{RUNS=await api('/api/runs')}catch(e){RUNS=LS.runs||[]}renderRuns();if(L.drag)renderDrag()}
 function renderRuns(){const rows=RUNS.filter(r=>HF=='a'||(r.n||4)==+HF);
   $('runs').innerHTML=rows.map(r=>{const n=r.n||4;return `<tr><td class="sub">${r.when}</td><td class="${r.done!==false?'ye':'mut'}"><b>${t(SN[n-1])}</b>${r.done===false?'<br><small class="mut">'+t('stopped')+'</small>':''}</td>${[0,1,2,3,4].map(i=>`<td${i==n-1&&r.done!==false?' style="font-weight:800"':''}${i>=n?' class="mut"':''}>${i<n&&r.t[i]>0?f2(r.t[i]):'—'}</td>`).join('')}<td>${(()=>{let k=-1;r.t.forEach((x,i)=>{if(x>0)k=i});return k>=0?f1(r.v[k]):'—'})()}</td></tr>`}).join('')||`<tr><td class="mut" colspan="8">${t(HF=='a'?'No runs yet':'No runs at this distance yet')}</td></tr>`}
-$('dArm').onclick=()=>{const d=L.drag;const arm=!['ARMED','READY','RUN'].includes(d.state);api('/api/drag',{cmd:arm?'arm':'cancel'}).then(j=>{L=j;renderDrag()})};
+$('dArm').onclick=()=>{const d=L.drag;const arm=!['ARMED','READY','RUN'].includes(d.state);
+  if(arm){MT.armAt=Date.now();MT.sel=null;MT.live=[];MT.liveRid='';MT.zoom={a:0,b:1};MT.drawnKey='';renderDrag()}  // ARM always starts from zero
+  api('/api/drag',{cmd:arm?'arm':'cancel'}).then(j=>{L=j;renderDrag()})};
 // Live values: the board pushes every new controller frame (Server-Sent Events on port 81, ~15-25 per second).
 // If the stream cannot open (old firmware, blocked port), the page asks every 250 ms instead.
 let ES=null,esOk=false,esAt=0,raf=0,lastDone='';

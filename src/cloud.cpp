@@ -15,6 +15,7 @@ static char token[65] = "";
 static volatile int httpCode = 0;
 static volatile uint32_t okAt = 0;
 static PayloadFn payloadFn = nullptr;
+static AckFn ackFn = nullptr;
 static CmdFn cmdFn = nullptr;
 static SemaphoreHandle_t mtx;
 
@@ -135,12 +136,13 @@ static void task(void *) {
     String reply;
     int code = post("ingest", body, &reply);
     httpCode = code;
-    if (code == 200 || code == 201) { okAt = millis(); runCommands(reply); }
+    if (code == 200 || code == 201) { okAt = millis(); if (ackFn && ackFn()) last = millis() - 1000; runCommands(reply); }
     else if (code == 401) vTaskDelay(pdMS_TO_TICKS(10000));  // token removed on the web: slow down
     else vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
 
+void setAck(AckFn a) { ackFn = a; }
 void begin(PayloadFn p, CmdFn c) {
   mtx = xSemaphoreCreateMutex();
   payloadFn = p;

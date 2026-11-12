@@ -31,8 +31,23 @@ const params = {
 const settings = { dash: 0, speedSrc: 2, logRate: 0, cells: 20, cellEmptyMv: 3000, cellFullMv: 4150, maxKmh: 120, maxAmp: 200, backlight: 4, wifi: 1, tzHours: 7, rollout: 0, gpsRate: 1, tyreW: 130, tyreA: 70, tyreR: 17, wheelCorr: 0, ratioX100: 100, maxG10: 16, advanced: 0, circMm: 1928, kmhAt1000: 115.7, headless: false };
 let SET = settings;
 settings.dragTarget = 1;
+// trace of a run for /dl?f=/tr/<rid>.bin (20-byte records, as the board writes them)
+function traceBin(rid, target, vmax, tau, amax) {
+  const recs = []; let d = 0, v = 0, t = 0;
+  while (d < target + 2 && t < 70) { t += 0.05; const vt = vmax * (1 - Math.exp(-t / tau)); v += (vt - v) * Math.min(1, t / 0.4); d += v / 3.6 * 0.05;
+    const a = amax * Math.exp(-t / 10) + 55, thr = t < 0.6 ? t / 0.6 * 210 : (t > 2.1 && t < 2.5 ? 150 : 255);
+    recs.push([rid + Math.round(t * 1000), d, v, a, v * 56.5, 84 - a * 0.035, thr]); }
+  const b = Buffer.alloc(recs.length * 20);
+  recs.forEach((r, i) => { const o = i * 20; b.writeUInt32LE(r[0] >>> 0, o); b.writeFloatLE(r[1], o + 4); b.writeUInt16LE(Math.round(r[2] * 10), o + 8);
+    b.writeInt16LE(Math.round(r[3] * 10), o + 10); b.writeUInt16LE(Math.round(r[4]), o + 12); b.writeUInt16LE(Math.round(r[5] * 10), o + 14);
+    b.writeUInt8(Math.round(r[6]), o + 16); b.writeUInt8(120, o + 17); b.writeUInt8(48, o + 18); });
+  return b;
+}
+const TRACES = { '412000': [402.3, 142, 6.0, 330], '388000': [402.3, 138, 6.3, 320], '501000': [1000, 192, 9, 300] };
 const RUNS = [
-  { when: '11 Nov 19:42', n: 5, done: true, t: [3.33, 7.78, 11.04, 15.62, 26.94], v: [39.6, 92.5, 131.2, 185.5, 190.0], peakA: 210 },
+  { when: '13 Nov 06:12', n: 4, done: true, rid: '412000', t: [2.47, 5.97, 9.51, 14.18], v: [55.7, 103.3, 120.4, 132.0], peakA: 330 },
+  { when: '13 Nov 06:02', n: 4, done: true, rid: '388000', t: [2.55, 6.11, 9.70, 14.41], v: [54.1, 101.0, 118.2, 129.5], peakA: 320 },
+  { when: '11 Nov 19:42', n: 5, rid: '501000', done: true, t: [3.33, 7.78, 11.04, 15.62, 26.94], v: [39.6, 92.5, 131.2, 185.5, 190.0], peakA: 210 },
   { when: '11 Nov 19:30', n: 3, done: true, t: [3.36, 7.84, 11.12], v: [39.2, 92.0, 130.6], peakA: 206 },
   { when: '11 Nov 19:18', n: 4, done: false, t: [3.40, 7.95, 0, 0], v: [38.8, 90.1, 0, 0], peakA: 180 },
   { when: '03 Nov 18:31', n: 4, done: true, t: [3.33, 7.78, 11.04, 16.24], v: [39.6, 92.5, 131.2, 140], peakA: 210 },
@@ -47,6 +62,8 @@ async function shot(page, name, liveObj, setup) {
     if (u.pathname === '/api/live') return json(liveObj);
     if (u.port === '81' && u.pathname === '/live') return r.fulfill({ contentType: 'text/event-stream', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'retry: 60000\n\ndata: ' + JSON.stringify(liveObj) + '\n\n' });
     if (u.pathname === '/api/runs') return json(RUNS);
+    if (u.pathname === '/dl' && /^\/tr\/\d+\.bin$/.test(u.searchParams.get('f') || '')) { const id = u.searchParams.get('f').slice(4, -4), T = TRACES[id];
+      return T ? r.fulfill({ contentType: 'application/octet-stream', body: traceBin(+id, ...T) }) : r.fulfill({ status: 404, body: 'not found' }); }
     if (u.pathname === '/api/lists') return json(lists);
     if (u.pathname === '/api/params') return json(params);
     if (u.pathname === '/api/settings') return json(SET);
@@ -73,13 +90,13 @@ async function shot(page, name, liveObj, setup) {
   await shot(page, 'web_01_dash_A', live(), style(0));
   await shot(page, 'web_02_dash_B', live({ kmh: 87, rpm: 752, amp: 132, kw: 10.1 }), style(1));
   await shot(page, 'web_03_dash_C', live({ kmh: 105, rpm: 908, amp: 172, kw: 13.3, gear: 'S' }), style(2));
-  const run = live({ kmh: 146, amp: 418, drag: { ...live().drag, state: 'RUN', el: 3.06, dist: 62.0, spd: 145.9, peakA: 0, hybrid: true, slipOk: true, slip: 6, gps: true, sp: [sp(1.66, 79.2, 420), sp(0), sp(0), sp(0), sp(0)] } });
+  const run = live({ kmh: 146, amp: 418, drag: { ...live().drag, state: 'RUN', rid: '412000', el: 3.06, dist: 62.0, spd: 145.9, peakA: 0, hybrid: true, slipOk: true, slip: 6, gps: true, sp: [sp(1.66, 79.2, 420), sp(0), sp(0), sp(0), sp(0)] } });
   await shot(page, 'web_04_drag_run', run, async p => { await style(0)(p); await tab('drag')(p); });
-  const gpsDone = live({ linked: false, kmh: 0, src: 1, drag: { ...live().drag, state: 'DONE', el: 15.81, dist: 402.3, gps: true, roll: true, sp: [sp(2.90, 39.6, 0), sp(7.36, 92.5, 0), sp(10.61, 131.2, 0), sp(15.81, 140.0, 0), sp(0)] } });
+  const gpsDone = live({ linked: false, kmh: 0, src: 1, drag: { ...live().drag, state: 'DONE', rid: '412000', el: 15.81, dist: 402.3, gps: true, roll: true, sp: [sp(2.90, 39.6, 0), sp(7.36, 92.5, 0), sp(10.61, 131.2, 0), sp(15.81, 140.0, 0), sp(0)] } });
   await shot(page, 'web_05_drag_gps_result', gpsDone, tab('drag'));
   const spinDone = live({ kmh: 0, amp: 0, drag: { ...live().drag, state: 'DONE', el: 8.48, dist: 402.3, spin: true, spinCorr: true, peakA: 520, sp: [sp(1.65, 76.0, 520), sp(3.94, 181.1, 520), sp(5.61, 252.0, 510), sp(8.48, 252.0, 480), sp(0)] } });
   await shot(page, 'web_05b_drag_spin_corrected', spinDone, tab('drag'));
-  const k1000 = live({ kmh: 0, amp: 0, drag: { ...live().drag, state: 'DONE', el: 26.94, dist: 1000, n: 5, target: 2, bestN: 5, haveBest: false, peakA: 210, sp: [sp(3.33, 39.6, 210), sp(7.78, 92.5, 196), sp(11.04, 131.2, 178), sp(15.62, 185.5, 165), sp(26.94, 190.0, 147)] } });
+  const k1000 = live({ kmh: 0, amp: 0, drag: { ...live().drag, state: 'DONE', rid: '501000', el: 26.94, dist: 1000, n: 5, target: 2, bestN: 5, haveBest: false, peakA: 210, sp: [sp(3.33, 39.6, 210), sp(7.78, 92.5, 196), sp(11.04, 131.2, 178), sp(15.62, 185.5, 165), sp(26.94, 190.0, 147)] } });
   await shot(page, 'web_05c_drag_1000_result', k1000, tab('drag'));
   await shot(page, 'web_05d_drag_history_1000', k1000, async p => { await tab('drag')(p); await p.click('#histSeg button[data-h="5"]'); });
   await shot(page, 'web_06_log', live({ kmh: 0, rpm: 0, amp: 0, status: 'IDLE' }), tab('log'));

@@ -19,6 +19,7 @@ void begin(bool hotspot);         // loads saved networks, starts hotspot + STA
 void loop();                      // call often from loop()
 void hotspot(bool on);            // the S3 board keeps it on
 bool hotspotOn();
+uint32_t dropCount();  // internet Wi-Fi losses since boot
 const char *apSsid();
 int apClients();
 

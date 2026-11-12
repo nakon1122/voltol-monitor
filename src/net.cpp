@@ -17,7 +17,8 @@ static uint32_t lastTry = 0, tryStart = 0;
 static bool wasOnline = false;
 static char curSsid[33] = "", curIp[16] = "";
 static int curRssi = 0, curCh = 0;
-static const uint32_t RETRY_MS = 30000, TRY_MS = 15000;
+static uint32_t drops = 0;        // internet Wi-Fi losses since boot (sent to the cloud page)
+static const uint32_t RETRY_MS = 10000, TRY_MS = 15000;
 
 static void persist() {
   Preferences p;
@@ -101,6 +102,7 @@ static void startTry(int i) {
   applyMode();
   WiFi.disconnect(false, false);
   WiFi.begin(nets[i].ssid, nets[i].pass);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
 }
 
 void begin(bool hs) {
@@ -117,6 +119,9 @@ void loop() {
   bool on = WiFi.status() == WL_CONNECTED;
   if (on) {
     if (!wasOnline) {
+      // the driver falls back to its default power on every (re)connect: back to full power
+      WiFi.setTxPower(WIFI_POWER_19_5dBm);
+      if (!btOn) WiFi.setSleep(false);
       strlcpy(curSsid, WiFi.SSID().c_str(), sizeof curSsid);
       strlcpy(curIp, WiFi.localIP().toString().c_str(), sizeof curIp);
       // remember the network that worked: tried first next time
@@ -132,16 +137,16 @@ void loop() {
     if (now - lastR > 2000) { lastR = now; curRssi = WiFi.RSSI(); curCh = WiFi.channel(); }
     tryIdx = -1;
   } else {
-    if (wasOnline) { lastTry = now; curSsid[0] = 0; curIp[0] = 0; curRssi = 0; }
+    if (wasOnline) { lastTry = now - RETRY_MS + 1500; curSsid[0] = 0; curIp[0] = 0; curRssi = 0; drops++; }  // lost: try again within 1.5 s
     if (tryIdx >= 0 && now - tryStart > TRY_MS) {  // this one did not work: stop trying, rest
       WiFi.disconnect(false, false);
       tryIdx = -1;
       lastTry = now;
     }
-    // next attempt only when nobody is using the hotspot (connecting scans all
-    // channels and would cut the phone that is on the module's web page);
-    // with a phone connected, one quiet try every 5 minutes
-    if (n && tryIdx < 0 && !scanRun && now - lastTry > RETRY_MS && (apClients() == 0 || now - lastTry > 300000)) {
+    // keep the cloud link up: retry every 10 s; with a phone on the module's hotspot every
+    // 30 s (a connect attempt scans the channels and briefly stalls that phone) - v1.8.3,
+    // was 5 minutes, which left the board off the cloud for long stretches
+    if (n && tryIdx < 0 && !scanRun && now - lastTry > RETRY_MS && (apClients() == 0 || now - lastTry > 30000)) {
       static int next = 0;
       startTry(next % n);
       next++;
@@ -151,6 +156,7 @@ void loop() {
 }
 
 bool hotspotOn() { return apOn; }
+uint32_t dropCount() { return drops; }
 const char *apSsid() { return apOn ? apName : "off"; }
 int apClients() { return apOn ? WiFi.softAPgetStationNum() : 0; }
 int count() { return n; }

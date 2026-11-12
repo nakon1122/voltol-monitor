@@ -450,7 +450,7 @@ static String liveJsonLocked() {
         .i("n", drag.r.n).i("target", cfg.dragTarget).raw("sp", splitsJson(drag.r)).n("peakA", drag.r.peakA, 0).n("peakKw", drag.r.peakKw).b("spin", drag.r.wheelspin)
         .b("spinCorr", drag.r.spinCorrected).n("maxSlip", drag.r.maxSlip, 0).b("slipOk", S.slipOk).n("slip", S.slipPct, 0)
         .b("hybrid", drag.cfg.fitN > 2 && S.linked)
-        .b("haveBest", S.haveBest).i("bestN", S.best.n).raw("best", splitsJson(S.best)).t("bestWhen", S.bestWhen);
+        .raw("rid", String(dragRunId)).b("haveBest", S.haveBest).i("bestN", S.best.n).raw("best", splitsJson(S.best)).t("bestWhen", S.bestWhen);
   char gs[2] = {S.linked ? "LMHS"[S.live.gear()] : '-', 0};
   J j;
   j.b("linked", S.linked).b("speedOk", S.speedOk).n("kmh", S.kmh).i("rpm", S.live.rpm).n("volt", S.live.volt)
@@ -479,7 +479,7 @@ static String listsJson() {
     J j; const DragRow &x = S.runs[i];
     String ts = "[", vs = "[";
     for (int k = 0; k < x.n && k < 5; k++) { ts += String(k ? "," : "") + String(x.t[k], 3); vs += String(k ? "," : "") + String(x.trap[k], 1); }
-    j.t("when", x.when).i("n", x.n).b("done", x.done).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
+    j.t("when", x.when).i("n", x.n).b("done", x.done).raw("rid", String(x.rid)).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
     r += (i ? "," : "") + j.obj();
   }
   for (int i = 0; i < S.backupN; i++) {
@@ -607,11 +607,20 @@ static void jstr(String &o, const char *s) {
 // run's speed / current / throttle trace from them). b9/b18/b19 = controller bytes whose
 // meaning is not known yet (throttle search); the first 5 fields are as in v1.6.x.
 static uint32_t cloudScanAt = 0;  // Wi-Fi scan asked from the cloud page: results go up for 2 minutes
-static const int FR_N = 60;
+// v1.8.3: samples stay in the ring until the cloud accepted them (a failed upload or a Wi-Fi
+// drop-out no longer loses part of a drag trace); 60 s of a run on S3 boards, 15 s on the CYD.
+#if defined(VOLTOL_CYD35) || (!defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5))
+static const int FR_N = 300;
+#else
+static const int FR_N = 1200;
+#endif
+static const int FR_PER_POST = 150;  // keeps one upload under the 12 kB the cloud accepts
 static float frBuf[FR_N][9];
 static uint32_t frT[FR_N];  // uptime kept as integer (a float loses ms after 4.6 h)
 static int frHead = 0, frCount = 0;
 static uint32_t frLast = 0;
+static uint32_t frSeq = 0;      // samples produced so far
+static uint32_t frSentTo = 0;   // sequence number after the last sample of the upload in flight
 // RPM / A / V at the moment each drag split is crossed (cloud split table)
 static float spRpm[ride::SPLITS], spAmp[ride::SPLITS], spVolt[ride::SPLITS];
 static bool spSeen[ride::SPLITS];
@@ -629,6 +638,10 @@ static void splitSample() {  // under LOCK
 }
 static void frameSample(uint32_t now) {  // under LOCK
   bool running = drag.state == ride::DragTimer::RUN;
+  if (drag.state != lastDragState) {  // a run starts: new id (uptime ms, the time base of the samples) and trace
+    if (running) { dragRunId = now; logger::traceStart(); }
+    lastDragState = drag.state;
+  }
   if (now - frLast < (running ? 50u : 200u)) return;
   frLast = now;
   bool ctl = S.linked;
@@ -636,15 +649,33 @@ static void frameSample(uint32_t now) {  // under LOCK
   frT[frHead] = now; f[0] = 0; f[1] = ctl ? S.live.rpm : 0; f[2] = S.speedOk ? S.kmh : 0; f[3] = ctl ? S.live.volt : 0; f[4] = ctl ? S.live.amp : 0;
   f[5] = running || drag.state == ride::DragTimer::DONE ? drag.distance() : -1;
   for (int i = 0; i < 3; i++) f[6 + i] = ctl ? S.live.raw[i] : -1;
+  if (running) {
+    logger::TraceSample t{};
+    t.ms = now; t.d = f[5]; t.kmh10 = (uint16_t)(f[2] * 10); t.a10 = (int16_t)(f[4] * 10); t.rpm = (uint16_t)f[1]; t.v10 = (uint16_t)(f[3] * 10);
+    for (int i = 0; i < 3; i++) t.raw[i] = ctl ? S.live.raw[i] : 0;
+    logger::traceAdd(t);
+  }
   frHead = (frHead + 1) % FR_N;
   if (frCount < FR_N) frCount++;
+  frSeq++;
+}
+// upload accepted: drop the samples it carried; true = more are waiting
+static bool frAck() {
+  LOCK();
+  uint32_t oldest = frSeq - frCount;
+  if (frSentTo > oldest) {
+    uint32_t drop = frSentTo - oldest;
+    frCount = drop >= (uint32_t)frCount ? 0 : frCount - drop;
+  }
+  bool more = frCount > 20;
+  UNLOCK();
+  return more;
 }
 // Same fields as v1.6.x (the web dashboard reads them) + Wi-Fi list for remote control.
 static void cloudPayload(String &o, int &rpm, bool &moving) {
   LOCK();
   bool ctl = S.linked;
   rpm = ctl ? S.live.rpm : 0;
-  if (drag.state != lastDragState) { if (drag.state == ride::DragTimer::RUN) dragRunId = millis(); lastDragState = drag.state; }
   moving = rpm != 0 || drag.state == ride::DragTimer::RUN;
   char b[640];
   snprintf(b, sizeof b,
@@ -686,8 +717,12 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
     o += sp;
   }
   o += "]}";
+  o += ",\"wifi_drops\":" + String(net::dropCount());
   o += ",\"frames\":[";
-  for (int i = 0; i < frCount; i++) {
+  int frSend = frCount < FR_PER_POST ? frCount : FR_PER_POST;  // oldest first
+  frSentTo = frSeq - frCount + frSend;
+  if (frCount > frSend) moving = true;
+  for (int i = 0; i < frSend; i++) {
     int k = (frHead - frCount + i + FR_N) % FR_N;
     const float *f = frBuf[k];
     char fr[110];
@@ -695,7 +730,6 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
              (int)f[6], (int)f[7], (int)f[8]);
     o += fr;
   }
-  frCount = 0;
   o += "]";
   if (cloudScanAt && millis() - cloudScanAt < 120000) {
     bool busy = net::scanBusy();
@@ -773,7 +807,7 @@ static String api(const String &path, const std::function<String(const char *)> 
       const DragRow &x = rows[i];
       J j; String ts = "[", vs = "[";
       for (int k = 0; k < x.n && k < 5; k++) { ts += String(k ? "," : "") + String(x.t[k], 3); vs += String(k ? "," : "") + String(x.trap[k], 1); }
-      j.t("when", x.when).i("n", x.n).b("done", x.done).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
+      j.t("when", x.when).i("n", x.n).b("done", x.done).raw("rid", String(x.rid)).raw("t", ts + "]").raw("v", vs + "]").n("peakA", x.peakA, 0);
       out += (i ? "," : "") + j.obj();
     }
     out += "]";
@@ -905,6 +939,7 @@ void setup() {
   ota::begin(VOLTOL_BOARD, updateGuard);
   web::enable(cfg.wifi);
   cloud::begin(cloudPayload, cloudCmd);
+  cloud::setAck(frAck);
   blesetup::begin(!cloud::configured(), onBleSetup);  // Bluetooth on all the time (setting) / 3-minute window for a new module
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
@@ -1039,7 +1074,9 @@ void loop() {
     r.n = drag.r.n; r.done = done;
     for (int i = 0; i < ride::SPLITS; i++) if (drag.r.s[i].done) { r.t[i] = drag.r.s[i].t; r.trap[i] = drag.r.s[i].trapKmh; }
     r.peakA = drag.r.peakA;
+    r.rid = dragRunId;
     LOCK();
+    logger::traceSave(dragRunId);
     logger::dragRow(r);
     S.runN = logger::loadDrag(S.runs, 10);
     UNLOCK();

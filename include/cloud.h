@@ -12,6 +12,10 @@ typedef void (*PayloadFn)(String &out, int &rpm, bool &moving);
 typedef String (*CmdFn)(const String &cmd, const String &argsJson, bool &ok);
 
 void begin(PayloadFn payload, CmdFn cmd);
+// Called after an upload was accepted (the samples in it can be dropped); return true when
+// samples are still waiting, so the next upload goes out right away (catch-up after a drop-out).
+typedef bool (*AckFn)();
+void setAck(AckFn ack);
 bool setToken(const char *hex64);   // from Bluetooth setup / USB serial / module web page
 bool configured();
 void forget();
