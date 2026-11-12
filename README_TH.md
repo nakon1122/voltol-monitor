@@ -7,6 +7,7 @@
 |---|---|---|
 | **ESP32-3248S035 (CYD 3.5", ทัช resistive)** | `VOLTOL_CYD35_*.bin` | จอบนรถ + หน้าเว็บ |
 | **ESP32-S3 DevKitC-1 (flash 8 MB)** | `VOLTOL_S3_*.bin` | ไม่มีจอ ใช้หน้าเว็บบนมือถือทั้งหมด |
+| **ESP32-S3 จอ 480×320 ทัช capacitive (ES3C40P, flash 16 MB)** | `VOLTOL_S3_40_*.bin` | จอบนรถ + หน้าเว็บ · ไดอะแกรม `docs/wiring_S3_4inch.png` |
 
 ![screens](assets/screens/ALL_SCREENS.png)
 
@@ -31,6 +32,20 @@
 | VOTOL RX + GPS RX | GPIO17 |
 | GPS TX | GPIO16 |
 | GND | GND |
+### ESP32-S3 จอ 480×320 (ES3C40P) — ช่อง UART 4 ขา (1.25 มม.) ด้านหลังบอร์ด
+
+| สาย | ช่องบนบอร์ด |
+|---|---|
+| VOTOL TX | UART · RXD |
+| VOTOL RX + GPS RX | UART · TXD |
+| GND | UART · GND |
+| 5V จาก DC-DC | UART · 5V (หรือ USB-C) |
+| GPS TX | IO · IO2 |
+| GPS VCC / GND | I2C · 3.3V / GND |
+
+- UART ของ VOTOL ใช้ 9600 baud เท่านั้น
+- ตั้ง Wi-Fi อินเทอร์เน็ตได้บนจอ: ตั้งค่า → Wi-Fi อินเทอร์เน็ต → เลือกเครือข่าย → พิมพ์รหัสผ่าน
+
 - microSD (อนาคต): ใส่การ์ด FAT32 ในช่องของบอร์ด ระบบจะเก็บ log ลงการ์ดแทนหน่วยความจำภายในเอง
 
 ## แฟลชเฟิร์มแวร์ (Windows)
