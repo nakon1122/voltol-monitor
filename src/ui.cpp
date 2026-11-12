@@ -961,7 +961,13 @@ static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
     g.fillRoundRect(b.x + b.w - 37, b.y + 2, 32, 24, 6, CHIP);
     g.textMid(b.x + b.w - 21, b.y + 14, "+", F18B, TEXT, AL_C);
   }
-  button(g, SB[0], "WHEEL"); button(g, SB[1], "TOUCH CAL"); button(g, SB[2], "INFO");
+  button(g, SB[0], "WHEEL"); button(g, SB[1],
+#if defined(VOLTOL_S340)
+         "COLOURS"
+#else
+         "TOUCH CAL"
+#endif
+  ); button(g, SB[2], "INFO");
 }
 static void adjust(Settings &c, int i, int d) {
   if (i == 0) { c.lang = !c.lang; return; }
@@ -1071,7 +1077,11 @@ static void infoPage(Gfx &g, const UiState &s) {
   infoLine(g, y, "GPS", t, s.gpsFix ? GREEN : TEXT);
   snprintf(t, sizeof t, T("%s · %u KB free · RAM %u KB"), s.sd ? T("SD card") : T("internal"), (unsigned)s.fsFreeKB, (unsigned)s.heapKB);
   infoLine(g, y, "Storage", t);
+#if defined(VOLTOL_S340)
+  infoLine(g, y, "Wiring", "UART: VOTOL TX>RXD · RX<TXD · GPS TX>IO2", MUTED2);
+#else
   infoLine(g, y, "Wiring", "VOTOL TX>IO35 · RX<IO22 · GPS TX>IO21, RX<IO22", MUTED2);
+#endif
   g.boxed(0, 248, 480, 30, BG, [&] { updateLine(g, s); });
   bool stopped = !s.linked || s.live.rpm == 0;
   button(g, IB_CHECK, "CHECK FOR UPDATE", s.netConnected ? CHIP : CARD2, s.netConnected ? TEXT : DIM);

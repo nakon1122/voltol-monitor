@@ -28,12 +28,12 @@ jobs:
           mkdir -p out/screens
           python tools/render_screens.py 2>&1 | tee out/render.log
           cp assets/screens/*.png out/screens/
-      - name: Build (CYD 3.5 + ESP32-S3)
+      - name: Build (CYD 3.5 + ESP32-S3 + S3 4.0")
         if: always()
         run: |
           set -o pipefail
           python tools/embed_web.py
-          pio run -e cyd35 -e esp32-s3 2>&1 | tee out/build.log
+          pio run -e cyd35 -e esp32-s3 -e s3-40 2>&1 | tee out/build.log
       - name: Make flash images
         run: |
           BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
@@ -47,6 +47,11 @@ jobs:
             --flash_mode dio --flash_freq 80m --flash_size 8MB \
             0x0 $S3/bootloader.bin 0x8000 $S3/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $S3/firmware.bin
           cp $S3/firmware.bin out/VOLTOL_S3_APP_UPDATE.bin
+          S40=.pio/build/s3-40
+          python -m esptool --chip esp32s3 merge_bin -o out/VOLTOL_S3_40_INSTALL.bin \
+            --flash_mode keep --flash_freq 80m --flash_size 16MB \
+            0x0 $S40/bootloader.bin 0x8000 $S40/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $S40/firmware.bin
+          cp $S40/firmware.bin out/VOLTOL_S3_40_APP_UPDATE.bin
           cp "$BOOT_APP0" out/BOOT_APP0.bin
           grep -E "RAM:|Flash:" out/build.log > out/SIZES.txt || true
           (cd out && sha256sum *.bin > SHA256SUMS.txt)
@@ -55,8 +60,9 @@ jobs:
           NOTE=$(git log -1 --pretty=%s | tr -d '"\\' | cut -c1-120)
           sz() { stat -c %s "out/$1"; }
           sh() { sha256sum "out/$1" | cut -d' ' -f1; }
-          printf '{"version":"%s","notes":"%s","cyd35":{"file":"VOLTOL_CYD35_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s3":{"file":"VOLTOL_S3_APP_UPDATE.bin","size":%s,"sha256":"%s"}}\n' \
-            "$VER" "$NOTE" "$(sz VOLTOL_CYD35_APP_UPDATE.bin)" "$(sh VOLTOL_CYD35_APP_UPDATE.bin)" "$(sz VOLTOL_S3_APP_UPDATE.bin)" "$(sh VOLTOL_S3_APP_UPDATE.bin)" > out/version.json
+          printf '{"version":"%s","notes":"%s","cyd35":{"file":"VOLTOL_CYD35_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s3":{"file":"VOLTOL_S3_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s340":{"file":"VOLTOL_S3_40_APP_UPDATE.bin","size":%s,"sha256":"%s"}}\n' \
+            "$VER" "$NOTE" "$(sz VOLTOL_CYD35_APP_UPDATE.bin)" "$(sh VOLTOL_CYD35_APP_UPDATE.bin)" "$(sz VOLTOL_S3_APP_UPDATE.bin)" "$(sh VOLTOL_S3_APP_UPDATE.bin)" \
+            "$(sz VOLTOL_S3_40_APP_UPDATE.bin)" "$(sh VOLTOL_S3_40_APP_UPDATE.bin)" > out/version.json
           cat out/version.json
       - name: Publish to firmware-build branch
         if: always()

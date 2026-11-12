@@ -106,7 +106,7 @@ static const Pair TH[] = {
     {"Drag rollout", "Rollout แดร็ก"}, {"GPS rate", "ความถี่ GPS"}, {"Max traction (spin)", "แรงยึดเกาะสูงสุด"},
     {"Internet Wi-Fi", "Wi-Fi อินเทอร์เน็ต"}, {"Language", "ภาษา"}, {"ไทย", "ไทย"}, {"English", "English"},
     {"AUTO", "อัตโนมัติ"}, {"MAX", "สูงสุด"}, {"ON", "เปิด"}, {"OFF", "ปิด"}, {"1 ft (strip)", "1 ฟุต (สนาม)"},
-    {"OFF (0 ft)", "ปิด (0 ฟุต)"}, {"set on web page", "ตั้งที่หน้าเว็บ"}, {"TOUCH CAL", "ปรับทัชสกรีน"}, {"INFO", "ข้อมูล"},
+    {"OFF (0 ft)", "ปิด (0 ฟุต)"}, {"set on web page", "ตั้งที่หน้าเว็บ"}, {"TOUCH CAL", "ปรับทัชสกรีน"}, {"COLOURS", "สลับสีจอ"}, {"INFO", "ข้อมูล"},
     {"Tyre width (mm)", "หน้ากว้างยาง (มม.)"}, {"Tyre aspect (%)", "ซีรีส์ยาง (%)"}, {"Rim (inch)", "ขอบล้อ (นิ้ว)"},
     {"Correction (%)", "ปรับแก้ (%)"}, {"Gear ratio", "อัตราทด"}, {"WHEEL / SPEED", "ล้อ / ความเร็ว"},
     {"circumference", "เส้นรอบวง"}, {"at 1000 rpm", "ที่ 1000 รอบ"}, {"Tip: ride 100 m", "เคล็ดลับ: ขี่ 100 ม."},

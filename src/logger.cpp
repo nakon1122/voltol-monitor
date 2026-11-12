@@ -13,6 +13,12 @@
 #include <FS.h>
 #include <LittleFS.h>
 #include <SD.h>
+#if HAS_SD == 2
+#include <SD_MMC.h>
+#define SDC SD_MMC
+#else
+#define SDC SD
+#endif
 #include <SPI.h>
 #include "config.h"
 #include "logger.h"
@@ -20,7 +26,7 @@
 namespace logger {
 static fs::FS *F = &LittleFS;
 static bool onSd = false, ok = false;
-#if HAS_SD
+#if HAS_SD == 1
 static SPIClass sdSpi(VSPI);
 #endif
 static SemaphoreHandle_t mux = nullptr;
@@ -30,7 +36,12 @@ static uint16_t trip = 0;
 
 bool begin() {
   if (!mux) mux = xSemaphoreCreateMutex();
-#if HAS_SD
+#if HAS_SD == 2
+  SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_D0, SDMMC_D1, SDMMC_D2, SDMMC_D3);
+  if (SD_MMC.begin("/sdcard", false) && SD_MMC.cardType() != CARD_NONE) {
+    F = &SD_MMC; onSd = true;
+  } else
+#elif HAS_SD
   sdSpi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   if (SD.begin(SD_CS, sdSpi, 20000000) && SD.cardType() != CARD_NONE) {
     F = &SD; onSd = true;
@@ -47,9 +58,9 @@ bool begin() {
 }
 bool sd() { return onSd; }
 fs::FS &fs() { return *F; }
-uint32_t totalKB() { return onSd ? SD.totalBytes() / 1024 : LittleFS.totalBytes() / 1024; }
+uint32_t totalKB() { return onSd ? SDC.totalBytes() / 1024 : LittleFS.totalBytes() / 1024; }
 uint32_t freeKB() {
-  return onSd ? (SD.totalBytes() - SD.usedBytes()) / 1024 : (LittleFS.totalBytes() - LittleFS.usedBytes()) / 1024;
+  return onSd ? (SDC.totalBytes() - SDC.usedBytes()) / 1024 : (LittleFS.totalBytes() - LittleFS.usedBytes()) / 1024;
 }
 
 static void append(const char *path, const String &s, const char *headerIfNew) {

@@ -110,23 +110,32 @@ def replay(lines, fonts):
     if cur: screens.append((name, cur.image()))
     return screens
 
-def main():
-    OUT.mkdir(parents=True, exist_ok=True)
+def render(flags=()):
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / 'sim'
-        subprocess.run(['g++', '-std=c++17', '-O1', '-I', str(ROOT / 'include'), '-o', str(exe),
+        subprocess.run(['g++', '-std=c++17', '-O1', *flags, '-I', str(ROOT / 'include'), '-o', str(exe),
                         str(ROOT / 'tools/sim/sim_main.cpp'), str(ROOT / 'src/ui.cpp'), str(ROOT / 'src/fonts_vlw.cpp'), str(ROOT / 'src/i18n.cpp')], check=True)
         lines = subprocess.run([str(exe)], check=True, capture_output=True, text=True).stdout.splitlines()
         lines += subprocess.run([str(exe), 'en'], check=True, capture_output=True, text=True).stdout.splitlines()
-    fonts = load_fonts()
-    shots = replay(lines, fonts)
+    return replay(lines, load_fonts())
+
+def main():
+    OUT.mkdir(parents=True, exist_ok=True)
+    shots = render()
     for f in OUT.glob('*.png'):
         if not f.name.startswith(('web_', 's3web_')): f.unlink()
     for name, im in shots:
         im.resize((W * 2, H * 2), Image.NEAREST).save(OUT / f'{name}.png')
     sheet(OUT / 'ALL_SCREENS.png', [x for x in shots if not x[0].startswith('en_')])
     sheet(OUT / 'ALL_SCREENS_EN.png', [x for x in shots if x[0].startswith('en_')])
-    print(f'{len(shots)} screens -> {OUT}')
+    # ESP32-S3 4.0" board: same 480x320 screens; pages that differ are saved as s340_<name>.png
+    base = dict(shots)
+    s40 = render(['-DVOLTOL_S340'])
+    for name, im in s40:
+        if name in base and np.array_equal(np.asarray(base[name]), np.asarray(im)): continue
+        im.resize((W * 2, H * 2), Image.NEAREST).save(OUT / f's340_{name}.png')
+    sheet(OUT / 'ALL_SCREENS_S3_40.png', [x for x in s40 if not x[0].startswith('en_')])
+    print(f'{len(shots)} screens -> {OUT} (+ S3 4.0")')
 
 def sheet(path, shots):
     # contact sheet

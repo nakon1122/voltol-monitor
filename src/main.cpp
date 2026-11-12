@@ -650,11 +650,7 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
            "\"speed_kmh\":%.1f,\"voltage\":%.1f,\"current\":%.1f,\"power_kw\":%.2f,\"soc\":%d,"
            "\"controller_temp_c\":%d,\"motor_temp_c\":%d,\"fault_mask\":%lu,\"gear\":\"%c\","
            "\"gps\":{\"fix\":%s,\"sats\":%d},\"hotspot_clients\":%d,\"uptime_s\":%lu,",
-#ifdef VOLTOL_HEADLESS
-           "s3",
-#else
-           "cyd35",
-#endif
+           VOLTOL_BOARD,
            ctl ? "true" : "false", net::rssi(), (unsigned long)S.baud, S.hz, (unsigned long)S.frames, (unsigned long)S.errors,
            S.speedOk ? S.kmh : 0.0f, ctl ? S.live.volt : 0.0f, ctl ? S.live.amp : 0.0f, ctl ? S.kw : 0.0f, S.soc,
            ctl ? S.live.tCtrl : 0, ctl ? S.live.tMotor : 0, (unsigned long)(ctl ? S.live.faults : 0),
@@ -903,11 +899,7 @@ void setup() {
   cfg.wifi = 1;
 #endif
   net::begin(cfg.wifi);
-#ifdef VOLTOL_HEADLESS
-  ota::begin("s3", updateGuard);
-#else
-  ota::begin("cyd35", updateGuard);
-#endif
+  ota::begin(VOLTOL_BOARD, updateGuard);
   web::enable(cfg.wifi);
   cloud::begin(cloudPayload, cloudCmd);
   blesetup::begin(!cloud::configured(), onBleSetup);  // Bluetooth on all the time (setting) / 3-minute window for a new module

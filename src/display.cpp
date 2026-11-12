@@ -6,6 +6,77 @@
 #include "display.h"
 #include "vlw_metrics.h"
 
+#if defined(VOLTOL_S340)
+// ESP32-S3 4.0" IPS (ES3C40P): ST7796S on SPI2, reset tied to EN, FT6336 capacitive touch on I2C.
+class LGFX : public lgfx::LGFX_Device {
+  lgfx::Panel_ST7796 panel_;
+  lgfx::Bus_SPI bus_;
+  lgfx::Light_PWM light_;
+  lgfx::Touch_FT5x06 touch_;
+
+public:
+  LGFX() {
+    {
+      auto cfg = bus_.config();
+      cfg.spi_host = SPI2_HOST;
+      cfg.spi_mode = 0;
+      cfg.freq_write = 40000000;
+      cfg.freq_read = 16000000;
+      cfg.spi_3wire = false;
+      cfg.use_lock = true;
+      cfg.dma_channel = SPI_DMA_CH_AUTO;
+      cfg.pin_sclk = 12;
+      cfg.pin_mosi = 11;
+      cfg.pin_miso = 13;
+      cfg.pin_dc = 46;
+      bus_.config(cfg);
+      panel_.setBus(&bus_);
+    }
+    {
+      auto cfg = panel_.config();
+      cfg.pin_cs = 10;
+      cfg.pin_rst = -1;
+      cfg.pin_busy = -1;
+      cfg.panel_width = 320;
+      cfg.panel_height = 480;
+      cfg.readable = true;
+      cfg.invert = true;  // IPS panel (can be flipped from Setup -> COLOURS)
+      cfg.rgb_order = false;
+      cfg.dlen_16bit = false;
+      cfg.bus_shared = false;
+      panel_.config(cfg);
+    }
+    {
+      auto cfg = light_.config();
+      cfg.pin_bl = 45;
+      cfg.invert = false;
+      cfg.freq = 12000;
+      cfg.pwm_channel = 7;
+      light_.config(cfg);
+      panel_.setLight(&light_);
+    }
+    {
+      auto cfg = touch_.config();
+      cfg.x_min = 0;
+      cfg.x_max = 319;
+      cfg.y_min = 0;
+      cfg.y_max = 479;
+      cfg.pin_int = 17;
+      cfg.pin_rst = 18;
+      cfg.bus_shared = false;
+      cfg.offset_rotation = 0;
+      cfg.i2c_port = 0;
+      cfg.i2c_addr = 0x38;
+      cfg.pin_sda = 16;
+      cfg.pin_scl = 15;
+      cfg.freq = 400000;
+      touch_.config(cfg);
+      panel_.setTouch(&touch_);
+    }
+    setPanel(&panel_);
+  }
+};
+#else
 class LGFX : public lgfx::LGFX_Device {
   lgfx::Panel_ST7796 panel_;
   lgfx::Bus_SPI bus_;
@@ -74,6 +145,7 @@ public:
     setPanel(&panel_);
   }
 };
+#endif
 
 static LGFX tft;
 
@@ -152,6 +224,19 @@ bool displayTouch(int &x, int &y) {
   x = tx; y = ty;
   return true;
 }
+#if defined(VOLTOL_S340)
+// Capacitive touch needs no calibration. The Setup button flips the IPS colour
+// inversion instead (panels of this size ship both ways); the choice is saved.
+void displayCalibrate(bool force) {
+  Preferences p;
+  p.begin("voltol-disp", false);
+  bool inv = p.getBool("inv", true);
+  if (force) { inv = !inv; p.putBool("inv", inv); }
+  p.end();
+  tft.invertDisplay(inv);
+  gfx.font = -1;
+}
+#else
 void displayCalibrate(bool force) {
   Preferences p;
   p.begin("voltol-disp", false);
@@ -174,3 +259,4 @@ void displayCalibrate(bool force) {
   p.end();
   gfx.font = -1;
 }
+#endif
