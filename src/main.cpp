@@ -1,3 +1,4 @@
+#include <new>
 // VOLTOL Monitor - dashboard, logger, 402 m timer and parameter tuner for
 // VOTOL EM-series controllers on the ESP32-3248S035 (CYD 3.5").
 #include <Arduino.h>
@@ -612,7 +613,7 @@ static uint32_t cloudScanAt = 0;  // Wi-Fi scan asked from the cloud page: resul
 #if defined(VOLTOL_CYD35) || (!defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5))
 static const int FR_N = 300;
 #else
-static const int FR_N = 1200;
+static const int FR_N = 600;    // 30 s of a run (uploads go out every 0.5 s; this only covers drop-outs)
 #endif
 static const int FR_PER_POST = 150;  // keeps one upload under the 12 kB the cloud accepts
 static float frBuf[FR_N][9];
@@ -800,8 +801,8 @@ static String api(const String &path, const std::function<String(const char *)> 
   if (path == "/api/live") out = liveJsonLocked();
   else if (path == "/api/lists") out = listsJson();
   else if (path == "/api/runs") {  // drag history, newest first (up to 50)
-    static DragRow rows[logger::DRAG_ROWS_MAX];
-    int n = logger::loadDrag(rows, logger::DRAG_ROWS_MAX);
+    DragRow *rows = new (std::nothrow) DragRow[logger::DRAG_ROWS_MAX];  // only while answering
+    int n = rows ? logger::loadDrag(rows, logger::DRAG_ROWS_MAX) : 0;
     out = "[";
     for (int i = 0; i < n; i++) {
       const DragRow &x = rows[i];
@@ -811,6 +812,7 @@ static String api(const String &path, const std::function<String(const char *)> 
       out += (i ? "," : "") + j.obj();
     }
     out += "]";
+    delete[] rows;
   }
   else if (path == "/api/params") out = paramsJson();
   else if (path == "/api/settings") out = settingsJson();
