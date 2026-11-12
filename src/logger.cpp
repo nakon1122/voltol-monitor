@@ -13,6 +13,7 @@
 #include <FS.h>
 #include <LittleFS.h>
 #include <SD.h>
+#include "config.h"
 #if HAS_SD == 2
 #include <SD_MMC.h>
 #define SDC SD_MMC
