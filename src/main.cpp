@@ -1025,7 +1025,8 @@ void setup() {
   vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
   gpsCfgAt = millis();
   delay(1200);
-  ui::go(PG_DASH);
+  // a new module waiting for its first Bluetooth setup: open the step-by-step setup page
+  ui::go(strcmp(blesetup::state(), "boot-ready") ? PG_DASH : PG_PAIR);
   needFull = true;
 }
 
@@ -1058,6 +1059,7 @@ static void doActions(UiActions &a) {
     if (why) { strlcpy(S.updMsg, why, sizeof S.updMsg); S.updFmt = why; S.updArg[0] = 0; } else ota::install();
   }
   if (a.profChanged) saveProf();
+  if (a.blePair) blesetup::startScreen();
   if (a.wifiScan && !net::scanBusy()) { net::scanStart(); wifiScanAt = millis(); wifiListed = -1; }
   if (a.wifiJoin && a.wifiSsid[0]) { net::add(a.wifiSsid, a.wifiPass); memset(a.wifiPass, 0, sizeof a.wifiPass); wifiListed = -1; }
   if (a.wifiForget && a.wifiSsid[0]) { net::remove(a.wifiSsid); wifiListed = -1; }
@@ -1086,6 +1088,11 @@ void loop() {
     if (o.msg[0]) { strlcpy(S.updMsg, o.msg, sizeof S.updMsg); S.updFmt = o.fmt; strlcpy(S.updArg, o.arg, sizeof S.updArg); }
     S.updState = o.state;
     S.updProgress = o.progress;
+    strlcpy(S.bleSt, blesetup::state(), sizeof S.bleSt);
+    S.bleLeft = blesetup::secondsLeft();
+    S.blePhone = blesetup::phone();
+    S.cloudCfg = cloud::configured();
+    S.cloudOk = cloud::online();
     S.rolledBack = o.rolledBack;
   }
   if (ui::page == PG_WIFI) {  // scan results for the on-screen Wi-Fi picker

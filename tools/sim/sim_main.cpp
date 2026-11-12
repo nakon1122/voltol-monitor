@@ -209,5 +209,23 @@ int main(int argc, char **argv) {
     ui::kbPreset("VOLTOL-Garage", "Volt@#2026", 2, true); shot("31_wifi_keyboard_symbols");
     s.netOn = true; s.netConnected = true; strcpy(s.netSsid, "Home-WiFi"); strcpy(s.netIp, "192.168.1.57");
   }
+  {  // cloud setup page: Bluetooth pairing steps (S3 boards) and the CYD route
+    strcpy(s.ssid, "VOLTOL-7A21");
+    ui::tick(700);
+    ui::page = PG_PAIR;
+    s.cloudCfg = false; s.cloudOk = false; s.netConnected = false; s.netSsid[0] = 0;
+    strcpy(s.bleSt, "locked"); shot("32_pair_start");
+    strcpy(s.bleSt, "boot-ready"); s.bleLeft = 165; s.blePhone = false; shot("33_pair_waiting");
+    s.blePhone = true; shot("34_pair_phone");
+    strcpy(s.bleSt, "joining"); s.blePhone = true; strcpy(s.netSsid, "Home-WiFi"); shot("35_pair_joining");
+    strcpy(s.bleSt, "wifi-fail"); shot("36_pair_wifi_fail");
+    strcpy(s.bleSt, "online"); s.netConnected = true; s.cloudCfg = true; shot("37_pair_cloud");
+    strcpy(s.bleSt, "cloud-ok"); s.cloudOk = true; shot("38_pair_done");
+    strcpy(s.bleSt, "expired"); s.cloudCfg = false; s.cloudOk = false; s.netConnected = false; s.netSsid[0] = 0; shot("39_pair_expired");
+    strcpy(s.bleSt, "unsupported"); s.netConnected = true; strcpy(s.netSsid, "Home-WiFi"); shot("40_pair_cyd");
+    s.cloudCfg = true; s.cloudOk = true; shot("41_pair_cyd_done");
+    ui::page = PG_DASH; ui::menuOpen = true; s.cloudCfg = false; s.updAvailable = true; shot("42_menu_alerts"); ui::menuOpen = false; s.updAvailable = false;
+    s.cloudCfg = true;
+  }
   return 0;
 }

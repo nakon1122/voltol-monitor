@@ -8,6 +8,7 @@
 #include <Preferences.h>
 #include <esp_bt.h>
 #include "net.h"
+#include "cloud.h"
 
 namespace blesetup {
 static const char *SVC = "648b7040-33c9-4a41-a133-83c009df0001";
@@ -39,6 +40,8 @@ static bool grantOn = false;    // one-time code from the module page is valid
 static uint32_t windowEnd = 0;  // 0 = no running window
 static uint32_t lastAdvCheck = 0;
 static uint8_t pubRaw[65];
+static bool screenOpen = false;  // pairing window opened from the module screen
+static uint32_t acceptedAt = 0;  // setup received: report Wi-Fi / cloud progress to the phone
 
 static int rng(void *, unsigned char *out, size_t n) { esp_fill_random(out, n); return 0; }
 static void setState(const char *s) {
@@ -79,7 +82,7 @@ static void handlePacket() {
   size_t off = 0;
   if (!physical && !grantOn) { setState("invalid-code"); return; }  // locked: needs a code from the module page
   if (physical) {
-    if (!needSetup || !haveKey || pktLen < 65 + 12 + 16) { setState("invalid-data"); return; }
+    if (!(needSetup || screenOpen) || !haveKey || pktLen < 65 + 12 + 16) { setState("invalid-data"); return; }
     mbedtls_ecp_point peer;
     mbedtls_mpi z;
     mbedtls_ecp_point_init(&peer);
@@ -190,6 +193,8 @@ static bool makeKey() {
 // resting state when no window is running
 static void rest() {
   grantOn = false;
+  screenOpen = false;
+  acceptedAt = 0;
   windowEnd = 0;
   if (needSetup && makeKey()) {
     physical = true;
@@ -254,8 +259,19 @@ void loop() {
     needSetup = false;
     grantOn = false;
     physical = false;
+    screenOpen = false;
     setState("accepted");
-    windowEnd = millis() + 15000;  // let the web page read "accepted"
+    acceptedAt = millis();
+    windowEnd = millis() + 120000;  // stay connectable: the phone page follows Wi-Fi + cloud progress
+  }
+  if (acceptedAt) {  // accepted -> joining -> online -> cloud-ok (or wifi-fail / cloud-fail)
+    uint32_t t = millis() - acceptedAt;
+    const char *ns = !net::online() ? (t > 45000 ? "wifi-fail" : "joining")
+                     : cloud::online() ? "cloud-ok" : (t > 90000 ? "cloud-fail" : "online");
+    if (t > 1500 && strcmp(st, ns)) {
+      setState(ns);
+      if (!strcmp(ns, "cloud-ok") && (int32_t)(windowEnd - millis()) > 20000) windowEnd = millis() + 20000;
+    }
   }
   if (scanReq) {
     scanReq = false;
@@ -267,7 +283,7 @@ void loop() {
   if (scanning && !net::scanBusy()) { scanning = false; fillScan(); }
   if (windowEnd && (int32_t)(millis() - windowEnd) > 0) {
     bool wasGrant = grantOn;
-    if (!always && !wasGrant && strcmp(st, "accepted")) { setState("expired"); stop(); windowEnd = 0; freeKey(); return; }
+    if (!always && !wasGrant && !acceptedAt) { setState("expired"); stop(); windowEnd = 0; freeKey(); return; }
     rest();
   }
   // keep advertising: restart it if a phone dropped without the stack doing so
@@ -280,7 +296,22 @@ void loop() {
 }
 bool active() { return on; }
 const char *state() { return st; }
-int secondsLeft() { return on && windowEnd ? (int)((int32_t)(windowEnd - millis()) / 1000) : 0; }
+int secondsLeft() { return on && windowEnd && !acceptedAt ? (int)((int32_t)(windowEnd - millis()) / 1000) : 0; }
+bool phone() {
+  NimBLEServer *srv = on ? NimBLEDevice::getServer() : nullptr;
+  return srv && srv->getConnectedCount() > 0;
+}
+void startScreen() {
+  if (!makeKey()) return;
+  physical = true;
+  screenOpen = true;
+  grantOn = false;
+  acceptedAt = 0;
+  if (!on) start();
+  if (cPub) cPub->setValue(pubRaw, 65);
+  windowEnd = millis() + WINDOW_MS;
+  setState("boot-ready");
+}
 }  // namespace blesetup
 #else
 // CYD 3.5: no room for Bluetooth next to the screen fonts. Pair with the
@@ -294,5 +325,7 @@ void loop() {}
 bool active() { return false; }
 const char *state() { return "unsupported"; }
 int secondsLeft() { return 0; }
+bool phone() { return false; }
+void startScreen() {}
 }  // namespace blesetup
 #endif

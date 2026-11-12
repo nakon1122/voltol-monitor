@@ -65,6 +65,61 @@ static void chip(Gfx &g, int x, int y, int w, const char *t, uint32_t bg, uint32
   g.textMid(x + w / 2, y + 9, t, F10, fg, AL_C);
 }
 
+// ---- small line icons (about 22 px, centred on cx, cy) ----
+static void thick(Gfx &g, int x0, int y0, int x1, int y1, uint32_t c) {
+  g.drawLine(x0, y0, x1, y1, c); g.drawLine(x0 + 1, y0, x1 + 1, y1, c); g.drawLine(x0, y0 + 1, x1, y1 + 1, c);
+}
+static void icGauge(Gfx &g, int cx, int cy, uint32_t c) {
+  g.fillArc(cx, cy + 5, 8, 11, 180, 360, c);
+  thick(g, cx, cy + 5, cx + 6, cy - 3, c);
+  g.fillCircle(cx, cy + 5, 2, c);
+}
+static void icFlag(Gfx &g, int cx, int cy, uint32_t c) {
+  thick(g, cx - 8, cy - 10, cx - 8, cy + 10, c);
+  g.fillRect(cx - 6, cy - 10, 15, 10, c);
+  for (int r = 0; r < 2; r++) for (int k = 0; k < 3; k++) if ((r + k) & 1) g.fillRect(cx - 6 + k * 5, cy - 10 + r * 5, 5, 5, 0x121A23);
+}
+static void icBars(Gfx &g, int cx, int cy, uint32_t c) {
+  g.fillRoundRect(cx - 10, cy + 1, 5, 9, 1, c);
+  g.fillRoundRect(cx - 3, cy - 5, 5, 15, 1, c);
+  g.fillRoundRect(cx + 4, cy - 10, 5, 20, 1, c);
+}
+static void icSliders(Gfx &g, int cx, int cy, uint32_t c) {
+  const int ky[3] = {-4, 5, -7};
+  for (int k = 0; k < 3; k++) {
+    int x = cx - 8 + k * 8;
+    g.drawLine(x, cy - 10, x, cy + 10, DIM);
+    g.fillRoundRect(x - 3, cy + ky[k] - 3, 7, 6, 2, c);
+  }
+}
+static void icGear(Gfx &g, int cx, int cy, uint32_t c, uint32_t bg) {
+  for (int k = 0; k < 8; k++) { int x, y; pt(cx, cy, 9, k * 45, x, y); g.fillCircle(x, y, 3, c); }
+  g.fillCircle(cx, cy, 8, c);
+  g.fillCircle(cx, cy, 3, bg);
+}
+static void icBt(Gfx &g, int cx, int cy, int s, uint32_t c) {  // Bluetooth rune, s = half height
+  int h = s, w = s / 2;
+  thick(g, cx, cy - h, cx, cy + h, c);
+  thick(g, cx, cy - h, cx + w, cy - h / 2, c); thick(g, cx + w, cy - h / 2, cx - w, cy + h / 2, c);
+  thick(g, cx, cy + h, cx + w, cy + h / 2, c); thick(g, cx + w, cy + h / 2, cx - w, cy - h / 2, c);
+}
+static void icCheck(Gfx &g, int cx, int cy, int s, uint32_t c) {
+  for (int d = -2; d <= 2; d++) { g.drawLine(cx - s, cy + d, cx - s / 3, cy + s * 2 / 3 + d, c); g.drawLine(cx - s / 3, cy + s * 2 / 3 + d, cx + s, cy - s * 2 / 3 + d, c); }
+}
+static void icCross(Gfx &g, int cx, int cy, int s, uint32_t c) {
+  for (int d = -2; d <= 2; d++) { g.drawLine(cx - s + d, cy - s, cx + s + d, cy + s, c); g.drawLine(cx + s + d, cy - s, cx - s + d, cy + s, c); }
+}
+static void icWifi(Gfx &g, int cx, int cy, int s, uint32_t c) {
+  for (int k = 0; k < 3; k++) { int r = s * (k + 1) / 3; g.fillArc(cx, cy, r - 3, r, 225, 315, c); }
+  g.fillCircle(cx, cy - 1, 3, c);
+}
+static void icCloud(Gfx &g, int cx, int cy, int s, uint32_t c) {
+  g.fillCircle(cx - s / 2, cy + s / 6, s / 3, c);
+  g.fillCircle(cx + s / 3, cy + s / 8, s * 2 / 5, c);
+  g.fillCircle(cx - s / 10, cy - s / 5, s / 2 - 1, c);
+  g.fillRoundRect(cx - s * 5 / 6, cy + s / 6, s * 5 / 3, s / 3 + 1, s / 6, c);
+}
+
 // Live values as text ("--" while the controller is silent).
 struct Vals {
   char kmh[24], rpm[24], volt[24], amp[24], kw[24], soc[24], tc[24], tm[24];
@@ -403,14 +458,31 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
 
 // ============================================================ MENU ========
 static const char *const MENU[5] = {"STYLE", "DRAG", "LOG", "TUNE", "SETUP"};
-static void drawMenu(Gfx &g, const Settings &c) {
-  g.fillRect(0, 256, 480, 64, 0x0B1016);
-  g.drawLine(0, 256, 480, 256, LINE);
+static int changedCount(const UiState &s);
+static void drawMenu(Gfx &g, const UiState &s, const Settings &c) {
+  g.fillRect(0, 252, 480, 68, 0x080C11);
+  g.fillRect(0, 252, 480, 2, 0x1A2430);
+  g.fillRoundRect(216, 255, 48, 3, 1, LINE);  // grab handle
+  static const uint32_t IC[5] = {BLUE, YELLOW, GREEN, 0xFF8A3D, SUB};
   for (int i = 0; i < 5; i++) {
-    Btn b = {6 + i * 95, 264, 88, 48};
-    g.fillRoundRect(b.x, b.y, b.w, b.h, 8, i == 0 ? 0x13202A : CHIP);
-    g.text(b.x + b.w / 2, b.y + 22, MENU[i], F13B, i == 0 ? BLUE : TEXT, AL_C);
-    if (i == 0) g.text(b.x + b.w / 2, b.y + 38, DASH_NAME[c.dash] + 2, F10, MUTED2, AL_C);
+    Btn b = {6 + i * 95, 262, 88, 52};
+    g.fillRoundRect(b.x, b.y, b.w, b.h, 10, 0x121A23);
+    g.drawRoundRect(b.x, b.y, b.w, b.h, 10, 0x1E2A36);
+    int cx = b.x + b.w / 2, cy = b.y + 16;
+    switch (i) {
+    case 0: icGauge(g, cx, cy, IC[i]); break;
+    case 1: icFlag(g, cx, cy, IC[i]); break;
+    case 2: icBars(g, cx, cy, IC[i]); break;
+    case 3: icSliders(g, cx, cy, IC[i]); break;
+    default: icGear(g, cx, cy, IC[i], 0x121A23); break;
+    }
+    g.text(cx, b.y + 44, i == 0 ? DASH_NAME[c.dash] + 2 : MENU[i], i == 0 ? F10 : F11B, i == 0 ? BLUE : TEXT, AL_C);
+    // little dots: unsaved tune changes / firmware update / cloud not linked yet
+    uint32_t dot = 0;
+    if (i == 3 && changedCount(s)) dot = YELLOW;
+    if (i == 4 && s.updAvailable) dot = YELLOW;
+    else if (i == 4 && !s.cloudCfg) dot = BLUE;
+    if (dot) { g.fillCircle(b.x + b.w - 11, b.y + 10, 5, 0x121A23); g.fillCircle(b.x + b.w - 11, b.y + 10, 4, dot); }
   }
 }
 
@@ -949,7 +1021,7 @@ static void setupValue(const Settings &c, int i, char *t) {
   }
 }
 static Btn srow(int i) { return {10 + (i / 8) * 234, 37 + (i % 8) * 30, 226, 28}; }
-static const Btn SB[3] = {{10, 282, 148, 30}, {166, 282, 148, 30}, {322, 282, 148, 30}};
+static const Btn SB[4] = {{10, 282, 110, 30}, {126, 282, 110, 30}, {242, 282, 110, 30}, {358, 282, 112, 30}};
 static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
   header(g, "SETUP");
   netName = s.netOn ? s.netSsid : "";
@@ -973,6 +1045,7 @@ static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
          "TOUCH CAL"
 #endif
   ); button(g, SB[2], "INFO");
+  button(g, SB[3], s.cloudOk ? "CLOUD OK" : "CLOUD SETUP", s.cloudOk ? DARKGREEN : 0x0F2A3A, s.cloudOk ? GREEN : BLUE);
 }
 static void adjust(Settings &c, int i, int d) {
   if (i == 0) { c.lang = !c.lang; return; }
@@ -1292,12 +1365,182 @@ static void dash(Gfx &g, const UiState &s, const Settings &c, bool full) {
   else if (c.dash == 2) dashC(g, s, c, full);
   else dashA(g, s, c, full);
 }
+
+// ======================================================= CLOUD SETUP ======
+// Step-by-step status for linking the module to the cloud. Boards with Bluetooth (S3) follow the
+// phone pairing live; the CYD (no Bluetooth) shows the Wi-Fi + module page route instead.
+static const Btn PB[2] = {{10, 282, 268, 30}, {286, 282, 184, 30}};
+enum { ST_WAIT, ST_ACTIVE, ST_DONE, ST_FAIL };
+struct PairView {
+  int n = 4;
+  const char *title[4], *sub[4];
+  int st[4] = {ST_WAIT, ST_WAIT, ST_WAIT, ST_WAIT};
+  int disc = 0;  // 0 idle, 1 waiting (countdown), 2 working, 3 done, 4 failed
+  const char *head = "", *line = "";
+  bool ble = false, window = false;
+};
+static char pairSub[3][64];
+static PairView pairView(const UiState &s) {
+  PairView v;
+  const char *b = s.bleSt;
+  v.ble = strcmp(b, "unsupported") != 0;
+  bool done = s.cloudCfg && s.cloudOk;
+  if (!v.ble) {
+    v.n = 3;
+    v.title[0] = "Join internet Wi-Fi";
+    snprintf(pairSub[0], sizeof pairSub[0], s.netConnected ? T("Connected: %s") : T("%s"), s.netConnected ? s.netSsid : T("Tap CHOOSE WI-FI below"));
+    v.sub[0] = pairSub[0];
+    v.title[1] = "Link to your account";
+    snprintf(pairSub[1], sizeof pairSub[1], T("Wi-Fi %s > 192.168.4.1"), s.ssid);
+    v.sub[1] = s.cloudCfg ? "Linked" : pairSub[1];
+    v.title[2] = "Data to Cloud";
+    v.sub[2] = done ? "Live on voltol.battlab.net" : "Waiting for steps 1-2";
+    v.st[0] = s.netConnected ? ST_DONE : ST_ACTIVE;
+    v.st[1] = s.cloudCfg ? ST_DONE : s.netConnected ? ST_ACTIVE : ST_WAIT;
+    v.st[2] = done ? ST_DONE : (s.netConnected && s.cloudCfg) ? ST_ACTIVE : ST_WAIT;
+    v.disc = done ? 3 : (s.netConnected && s.cloudCfg) ? 2 : 0;
+    v.head = done ? "Connected!" : (s.netConnected && s.cloudCfg) ? "Connecting..." : "Not linked yet";
+    v.line = done ? "See it on voltol.battlab.net" : "This screen has no Bluetooth";
+    return v;
+  }
+  v.title[0] = "Phone connects by Bluetooth";
+  v.sub[0] = "Phone: voltol.battlab.net > Add module";
+  v.title[1] = "Choose Wi-Fi on the phone";
+  v.sub[1] = "Pick the Wi-Fi, enter its password";
+  v.title[2] = "Module joins Wi-Fi";
+  snprintf(pairSub[2], sizeof pairSub[2], T("%s"), s.netSsid[0] ? s.netSsid : T("2.4 GHz Wi-Fi only"));
+  v.sub[2] = pairSub[2];
+  v.title[3] = "Connected to Cloud";
+  v.sub[3] = "Live data every second";
+  bool win = !strcmp(b, "boot-ready") || !strcmp(b, "ready");
+  v.window = win;
+  if (!strcmp(b, "cloud-ok") || (done && !win && strcmp(b, "joining") && strcmp(b, "accepted") && strcmp(b, "online"))) {
+    for (int i = 0; i < 4; i++) v.st[i] = ST_DONE;
+    v.disc = 3; v.head = "Connected!"; v.line = "See it on voltol.battlab.net";
+  } else if (win) {
+    v.st[0] = s.blePhone ? ST_DONE : ST_ACTIVE;
+    v.st[1] = s.blePhone ? ST_ACTIVE : ST_WAIT;
+    v.disc = s.blePhone ? 2 : 1;
+    v.head = s.blePhone ? "Phone connected" : "Waiting for phone";
+    v.line = s.blePhone ? "Enter the Wi-Fi on the phone" : "Bluetooth name: VOLTOL Setup";
+  } else if (!strcmp(b, "accepted") || !strcmp(b, "joining")) {
+    v.st[0] = v.st[1] = ST_DONE; v.st[2] = ST_ACTIVE;
+    v.disc = 2; v.head = "Joining Wi-Fi..."; v.line = "Takes up to 30 seconds";
+  } else if (!strcmp(b, "online")) {
+    v.st[0] = v.st[1] = v.st[2] = ST_DONE; v.st[3] = ST_ACTIVE;
+    v.disc = 2; v.head = "Connecting to Cloud..."; v.line = "Wi-Fi OK, linking the account";
+  } else if (!strcmp(b, "wifi-fail")) {
+    v.st[0] = v.st[1] = ST_DONE; v.st[2] = ST_FAIL;
+    v.sub[2] = "Wrong password or Wi-Fi out of range";
+    v.disc = 4; v.head = "Wi-Fi did not connect"; v.line = "Check the password, then PAIR AGAIN";
+  } else if (!strcmp(b, "cloud-fail")) {
+    v.st[0] = v.st[1] = v.st[2] = ST_DONE; v.st[3] = ST_FAIL;
+    v.sub[3] = "Wi-Fi has no internet?";
+    v.disc = 4; v.head = "Cloud not reached"; v.line = "Check the internet, it keeps trying";
+  } else if (!strcmp(b, "expired")) {
+    v.st[0] = ST_FAIL; v.sub[0] = "No phone within 3 minutes";
+    v.disc = 4; v.head = "Time is up"; v.line = "Press PAIR AGAIN and retry";
+  } else if (!strncmp(b, "invalid", 7)) {
+    v.st[0] = ST_DONE; v.st[1] = ST_FAIL; v.sub[1] = "Setup refused, send it again";
+    v.disc = 4; v.head = "Setup not accepted"; v.line = "Press PAIR AGAIN and retry";
+  } else if (s.cloudCfg) {  // linked earlier, not uploading right now
+    v.st[0] = v.st[1] = ST_DONE;
+    v.st[2] = s.netConnected ? ST_DONE : ST_ACTIVE;
+    v.st[3] = s.netConnected ? ST_ACTIVE : ST_WAIT;
+    v.disc = 2; v.head = s.netConnected ? "Connecting to Cloud..." : "Looking for Wi-Fi...";
+    v.line = "PAIR AGAIN to change the Wi-Fi";
+  } else {
+    v.disc = 0; v.head = "Not linked yet"; v.line = "Press START PAIRING below";
+  }
+  return v;
+}
+static void pairBody(Gfx &g, const UiState &s) {
+  PairView v = pairView(s);
+  // status disc
+  const int cx = 92, cy = 128;
+  uint32_t col = v.disc == 1 ? BLUE : v.disc == 2 ? YELLOW : v.disc == 3 ? GREEN : v.disc == 4 ? RED : MUTED2;
+  g.fillCircle(cx, cy, 64, mix(BG, col, 0.10f));
+  g.fillArc(cx, cy, 56, 62, 0, 360, mix(BG, col, 0.25f));
+  if (v.disc == 1) {  // remaining time as a shrinking ring + pulse
+    float f = s.bleLeft / 180.0f; if (f > 1) f = 1; if (f < 0) f = 0;
+    if (f > 0) g.fillArc(cx, cy, 56, 62, -90, -90 + 360 * f, col);
+    float p = (nowMs % 1500) / 1500.0f;
+    g.fillCircle(cx, cy - 14, 22 + (int)(6 * p), mix(BG, col, 0.30f * (1 - p)));
+    icBt(g, cx, cy - 14, 15, col);
+    char t[16]; snprintf(t, sizeof t, "%d:%02d", s.bleLeft / 60, s.bleLeft % 60);
+    g.text(cx, cy + 36, t, F24B, TEXT, AL_C);
+  } else if (v.disc == 2) {  // spinner
+    float a = (nowMs % 1200) * 0.3f;
+    g.fillArc(cx, cy, 56, 62, a, a + 80, col);
+    if (v.ble && v.st[2] != ST_ACTIVE && v.st[3] != ST_ACTIVE) icBt(g, cx, cy, 20, col);
+    else if (v.st[v.n - 1] == ST_ACTIVE) icCloud(g, cx, cy + 4, 46, col);
+    else icWifi(g, cx, cy + 16, 42, col);
+  } else if (v.disc == 3) {
+    g.fillCircle(cx, cy, 44, col);
+    icCheck(g, cx, cy + 2, 20, BG);
+  } else if (v.disc == 4) {
+    g.fillCircle(cx, cy, 44, col);
+    icCross(g, cx, cy, 16, BG);
+  } else {
+    if (v.ble) icBt(g, cx, cy, 22, col); else icCloud(g, cx, cy + 4, 50, col);
+  }
+  g.text(cx, 220, v.head, F13B, v.disc ? col : TEXT, AL_C);
+  g.text(cx, 240, v.line, F10, MUTED2, AL_C);
+  // steps
+  int rowH = v.n == 4 ? 58 : 76, y0 = 40;
+  for (int i = 0; i < v.n; i++) {
+    int y = y0 + i * rowH, ix = 204, iy = y + rowH / 2 - 4;
+    bool act = v.st[i] == ST_ACTIVE;
+    g.fillRoundRect(180, y + 2, 290, rowH - 6, 10, act ? 0x161F28 : v.st[i] == ST_FAIL ? 0x2A1212 : CARD);
+    if (i < v.n - 1) g.fillRect(ix - 1, iy + 14, 2, rowH - 28, v.st[i] == ST_DONE ? mix(BG, GREEN, 0.6f) : LINE);
+    if (v.st[i] == ST_DONE) { g.fillCircle(ix, iy, 13, GREEN); icCheck(g, ix, iy + 1, 6, BG); }
+    else if (v.st[i] == ST_FAIL) { g.fillCircle(ix, iy, 13, RED); icCross(g, ix, iy, 5, BG); }
+    else if (act) {
+      g.fillCircle(ix, iy, 13, mix(BG, YELLOW, 0.2f));
+      float a = (nowMs % 1000) * 0.36f;
+      g.fillArc(ix, iy, 10, 13, a, a + 110, YELLOW);
+      g.fillCircle(ix, iy, 4, YELLOW);
+    } else {
+      g.fillCircle(ix, iy, 13, CHIP);
+      char n[4]; snprintf(n, sizeof n, "%d", i + 1);
+      g.textMid(ix, iy, n, F11B, MUTED2, AL_C);
+    }
+    uint32_t tc = v.st[i] == ST_WAIT ? MUTED2 : v.st[i] == ST_FAIL ? 0xFF8A80 : TEXT;
+    g.text(228, iy - 3, v.title[i], F13B, tc);
+    g.text(228, iy + 15, v.sub[i], F10, act ? YELLOW : v.st[i] == ST_FAIL ? 0xFF8A80 : MUTED);
+  }
+}
+static void pairButtons(Gfx &g, const UiState &s) {
+  PairView v = pairView(s);
+  if (!v.ble) button(g, PB[0], "CHOOSE WI-FI", 0x0F2A3A, BLUE);
+  else if (v.window) button(g, PB[0], "WAITING FOR PHONE...", CARD2, MUTED2);
+  else button(g, PB[0], v.disc == 0 ? "START BLUETOOTH PAIRING" : "PAIR AGAIN", v.disc == 0 ? BLUE : CHIP, v.disc == 0 ? 0x001018 : TEXT);
+  button(g, PB[1], v.disc == 3 ? "GO TO DASH" : "LATER", v.disc == 3 ? GREEN : CHIP, v.disc == 3 ? 0x001A0E : TEXT);
+}
+static void pairPage(Gfx &g, const UiState &s) {
+  header(g, "CLOUD SETUP", s.cloudOk ? "ONLINE" : s.cloudCfg ? "LINKED" : "NOT LINKED", s.cloudOk ? GREEN : s.cloudCfg ? YELLOW : MUTED2);
+  pairBody(g, s);
+  pairButtons(g, s);
+}
+static uint32_t pairDrawAt = 0;
+static bool pairTouch(int x, int y, UiState &s, UiActions &a) {
+  if (hit(BACK, x, y) || hit(PB[1], x, y)) { go(PG_DASH); return true; }
+  if (hit(PB[0], x, y)) {
+    PairView v = pairView(s);
+    if (!v.ble) { go(PG_WIFI); a.wifiScan = true; return true; }
+    if (v.window) return false;
+    a.blePair = true;
+    strcpy(s.bleSt, "boot-ready"); s.bleLeft = 180; s.blePhone = false;  // shown at once; main loop confirms
+    return true;
+  }
+  return false;
+}
 void draw(Gfx &g, const UiState &s, const Settings &c) {
   i18n::lang = c.lang;
   showAdv = c.advanced;
   switch (page) {
   case PG_BOOT: bootPage(g, s); break;
-  case PG_DASH: dash(g, s, c, true); if (menuOpen) drawMenu(g, c); break;
+  case PG_DASH: dash(g, s, c, true); if (menuOpen) drawMenu(g, s, c); break;
   case PG_DRAG: lastDragState = -1; dragPage(g, s, c, true); break;
   case PG_DRAG_HIST: dragHist(g, s); break;
   case PG_LOG: logPage(g, s, c); break;
@@ -1313,6 +1556,7 @@ void draw(Gfx &g, const UiState &s, const Settings &c) {
   case PG_INFO: infoPage(g, s); break;
   case PG_WIFI: wifiPage(g, s); break;
   case PG_KEYB: kbPage(g); break;
+  case PG_PAIR: pairPage(g, s); pairDrawAt = nowMs; break;
   default: break;
   }
 }
@@ -1324,6 +1568,11 @@ void update(Gfx &g, const UiState &s, const Settings &c) {
   else if (page == PG_KEYB && kbDirty) {
     kbDirty = false;
     g.boxed(0, 34, 480, 50, BG, [&] { kbField(g); button(g, {392, 38, 78, 42}, kbShow ? "HIDE" : "SHOW"); });
+  } else if (page == PG_PAIR && nowMs - pairDrawAt > 200) {  // animation + live status
+    static uint32_t btnAt = 0;
+    pairDrawAt = nowMs;
+    g.boxed(0, 32, 480, 248, BG, [&] { pairBody(g, s); });
+    if (nowMs - btnAt > 1000) { btnAt = nowMs; g.boxed(0, 280, 480, 40, BG, [&] { pairButtons(g, s); }); }
   } else if (page == PG_WIFI && nowMs - wifiDrawAt > 1000) {
     wifiDrawAt = nowMs;
     g.boxed(0, 34, 480, 244, BG, [&] { wifiStatus(g, s); wifiList(g, s); });
@@ -1460,6 +1709,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     if (hit(SB[0], x, y)) { go(PG_WHEEL); return true; }
     if (hit(SB[1], x, y)) { a.touchCal = true; return true; }
     if (hit(SB[2], x, y)) { go(PG_INFO); return true; }
+    if (hit(SB[3], x, y)) { go(PG_PAIR); return true; }
     if (hit(srow(NSROW - 1), x, y)) { go(PG_WIFI); a.wifiScan = true; return true; }  // internet Wi-Fi picker
     for (int i = 0; i < NSROW - 1; i++) {
       Btn b = srow(i);
@@ -1476,6 +1726,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     }
     return false;
   case PG_WIFI: return wifiTouch(x, y, s, a);
+  case PG_PAIR: return pairTouch(x, y, s, a);
   case PG_KEYB: return kbTouch(x, y, a);
   case PG_INFO:
     if (hit(IB_CHECK, x, y)) { if (s.netConnected) a.checkUpdate = true; return true; }

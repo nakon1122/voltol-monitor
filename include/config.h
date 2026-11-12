@@ -1,6 +1,6 @@
 // Board wiring for the ESP32-3248S035 ("CYD 3.5", ST7796 + XPT2046).
 #pragma once
-#define VOLTOL_FW "1.8.4"
+#define VOLTOL_FW "1.8.5"
 
 #if defined(VOLTOL_S340)
 // ---- ESP32-S3 4.0" 480x320 IPS (LCDwiki ES3C40P: ST7796 SPI + FT6336 touch) ----

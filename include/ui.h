@@ -105,6 +105,11 @@ struct UiState {
   WifiNet wifiNets[10];
   int wifiN = 0;
   bool wifiScanning = false;
+  // cloud setup page (Bluetooth pairing status)
+  char bleSt[16] = "unsupported";  // blesetup::state()
+  int bleLeft = 0;                 // seconds left in the pairing window
+  bool blePhone = false;           // phone connected over Bluetooth
+  bool cloudCfg = false, cloudOk = false;  // module linked to an account / uploads accepted
   uint8_t updState = 0;        // ota::State
   int updProgress = 0;
   // info
@@ -120,12 +125,13 @@ struct UiActions {
   bool touchCal = false, newTrip = false;
   bool checkUpdate = false, installUpdate = false, profChanged = false;
   bool wifiScan = false, wifiJoin = false, wifiForget = false;
+  bool blePair = false;       // open a Bluetooth pairing window from the screen
   char wifiSsid[33] = "", wifiPass[65] = "";
 };
 
 enum Page : uint8_t {
   PG_BOOT, PG_DASH, PG_DRAG, PG_DRAG_HIST, PG_LOG, PG_GRAPH, PG_FAULTS,
-  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_WIFI, PG_KEYB, PG_COUNT
+  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_WIFI, PG_KEYB, PG_PAIR, PG_COUNT
 };
 
 namespace ui {

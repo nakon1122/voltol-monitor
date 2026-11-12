@@ -21,4 +21,8 @@ void loop();
 bool active();
 const char *state();   // idle / boot-ready / ready / accepted / ...
 int secondsLeft();
+bool phone();          // a phone is connected over Bluetooth right now
+// Open a 3-minute pairing window from the module's own screen (someone is at the bike, like the
+// first-boot window): the phone page sends Wi-Fi + cloud code without a code from the module page.
+void startScreen();
 }  // namespace blesetup
