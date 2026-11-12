@@ -130,7 +130,7 @@ def main():
     sheet(OUT / 'ALL_SCREENS_EN.png', [x for x in shots if x[0].startswith('en_')])
     # ESP32-S3 4.0" board: same 480x320 screens; pages that differ are saved as s340_<name>.png
     base = dict(shots)
-    s40 = render(['-DVOLTOL_S340'])
+    s40 = render(['-DVOTOL_S340'])
     for name, im in s40:
         if name in base and np.array_equal(np.asarray(base[name]), np.asarray(im)): continue
         im.resize((W * 2, H * 2), Image.NEAREST).save(OUT / f's340_{name}.png')

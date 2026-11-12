@@ -1,5 +1,5 @@
 #include "blesetup.h"
-#ifndef VOLTOL_NO_BLE
+#ifndef VOTOL_NO_BLE
 #include <NimBLEDevice.h>
 #include <esp_random.h>
 #include <mbedtls/ecdh.h>
@@ -147,7 +147,7 @@ static void setPowerMax() {
 static void start() {
   if (on) return;
   net::btCoex(true);  // modem sleep on first, or the radio driver aborts
-  NimBLEDevice::init("VOLTOL Setup");
+  NimBLEDevice::init("VOTOL Setup");
   setPowerMax();
   NimBLEServer *srv = NimBLEDevice::createServer();
   srv->advertiseOnDisconnect(true);
@@ -212,7 +212,7 @@ static void rest() {
 
 static bool loadSetting() {
   Preferences p;
-  p.begin("voltol-ble", true);
+  p.begin("votol-ble", true);
   bool v = p.getBool("on", true);
   p.end();
   return v;
@@ -228,7 +228,7 @@ void begin(bool unconfigured, DoneFn done) {
 
 void setEnabled(bool v) {
   Preferences p;
-  p.begin("voltol-ble", false);
+  p.begin("votol-ble", false);
   p.putBool("on", v);
   p.end();
   always = v;

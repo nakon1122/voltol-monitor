@@ -1,9 +1,9 @@
-// "VOLTOL Setup" Bluetooth pairing with voltol.battlab.net (same protocol as v1.6.x):
+// "VOTOL Setup" Bluetooth pairing with votol.battlab.net (same protocol as v1.6.x):
 // the web page sends the home Wi-Fi + the module's cloud token, encrypted.
 //  * boot-ready: a module without a cloud token accepts setup for 3 minutes after
 //    power-on (key agreed with ECDH P-256, you are next to the bike).
 //  * ready: "PAIR" on the module's web page makes a one-time code (link
-//    voltol.battlab.net/#pair=CODE), valid 3 minutes.
+//    votol.battlab.net/#pair=CODE), valid 3 minutes.
 //  * locked: (1.7.3) Bluetooth stays on all the time (setting, default on) so the
 //    web page can connect at once; nothing can be changed without a code.
 // With the setting off, Bluetooth only runs during the windows above.

@@ -157,7 +157,7 @@ void dragRow(const DragRow &r) {
 }
 
 // ---- drag run traces
-#if !defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5)
+#if !defined(VOTOL_HEADLESS) && !defined(VOTOL_S340) && !defined(VOTOL_P4C5)
 static const int TR_MAX = 700;   // 35 s at 20 Hz
 #else
 static const int TR_MAX = 1400;  // 70 s
@@ -182,7 +182,7 @@ void traceSave(uint32_t runId) {
   f.close();
   // keep the newest traces only: internal flash 4 runs, microSD / big flash 30 runs
   int keep = onSd ? 30 :
-#if !defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5)
+#if !defined(VOTOL_HEADLESS) && !defined(VOTOL_S340) && !defined(VOTOL_P4C5)
       4;
 #else
       30;

@@ -1,4 +1,4 @@
-// VOLTOL Cloud (voltol.battlab.net): live telemetry to the BATTLAB Supabase
+// VOTOL Cloud (votol.battlab.net): live telemetry to the BATTLAB Supabase
 // project and commands back from the web page (Wi-Fi networks, update, drag).
 // Runs in its own task on core 0, so a slow internet never blocks the web
 // page, the screen or the controller link.

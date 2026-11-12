@@ -38,37 +38,37 @@ jobs:
         run: |
           BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
           B=.pio/build/cyd35
-          python -m esptool --chip esp32 merge_bin -o out/VOLTOL_CYD35_INSTALL.bin \
+          python -m esptool --chip esp32 merge_bin -o out/VOTOL_CYD35_INSTALL.bin \
             --flash_mode dio --flash_freq 40m --flash_size 4MB \
             0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin
-          cp $B/firmware.bin out/VOLTOL_CYD35_APP_UPDATE.bin
+          cp $B/firmware.bin out/VOTOL_CYD35_APP_UPDATE.bin
           S3=.pio/build/esp32-s3
-          python -m esptool --chip esp32s3 merge_bin -o out/VOLTOL_S3_INSTALL.bin \
+          python -m esptool --chip esp32s3 merge_bin -o out/VOTOL_S3_INSTALL.bin \
             --flash_mode dio --flash_freq 80m --flash_size 8MB \
             0x0 $S3/bootloader.bin 0x8000 $S3/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $S3/firmware.bin
-          cp $S3/firmware.bin out/VOLTOL_S3_APP_UPDATE.bin
+          cp $S3/firmware.bin out/VOTOL_S3_APP_UPDATE.bin
           S40=.pio/build/s3-40
-          python -m esptool --chip esp32s3 merge_bin -o out/VOLTOL_S3_40_INSTALL.bin \
+          python -m esptool --chip esp32s3 merge_bin -o out/VOTOL_S3_40_INSTALL.bin \
             --flash_mode keep --flash_freq 80m --flash_size 16MB \
             0x0 $S40/bootloader.bin 0x8000 $S40/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $S40/firmware.bin
-          cp $S40/firmware.bin out/VOLTOL_S3_40_APP_UPDATE.bin
+          cp $S40/firmware.bin out/VOTOL_S3_40_APP_UPDATE.bin
           cp "$BOOT_APP0" out/BOOT_APP0.bin
           grep -E "RAM:|Flash:" out/build.log > out/SIZES.txt || true
           (cd out && sha256sum *.bin > SHA256SUMS.txt)
           # version.json: read by the boards for internet updates
-          VER=$(grep -oP '#define VOLTOL_FW "\K[^"]+' include/config.h)
+          VER=$(grep -oP '#define VOTOL_FW "\K[^"]+' include/config.h)
           NOTE=$(git log -1 --pretty=%s | tr -d '"\\' | cut -c1-120)
           sz() { stat -c %s "out/$1"; }
           sh() { sha256sum "out/$1" | cut -d' ' -f1; }
-          printf '{"version":"%s","notes":"%s","cyd35":{"file":"VOLTOL_CYD35_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s3":{"file":"VOLTOL_S3_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s340":{"file":"VOLTOL_S3_40_APP_UPDATE.bin","size":%s,"sha256":"%s"}}\n' \
-            "$VER" "$NOTE" "$(sz VOLTOL_CYD35_APP_UPDATE.bin)" "$(sh VOLTOL_CYD35_APP_UPDATE.bin)" "$(sz VOLTOL_S3_APP_UPDATE.bin)" "$(sh VOLTOL_S3_APP_UPDATE.bin)" \
-            "$(sz VOLTOL_S3_40_APP_UPDATE.bin)" "$(sh VOLTOL_S3_40_APP_UPDATE.bin)" > out/version.json
+          printf '{"version":"%s","notes":"%s","cyd35":{"file":"VOTOL_CYD35_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s3":{"file":"VOTOL_S3_APP_UPDATE.bin","size":%s,"sha256":"%s"},"s340":{"file":"VOTOL_S3_40_APP_UPDATE.bin","size":%s,"sha256":"%s"}}\n' \
+            "$VER" "$NOTE" "$(sz VOTOL_CYD35_APP_UPDATE.bin)" "$(sh VOTOL_CYD35_APP_UPDATE.bin)" "$(sz VOTOL_S3_APP_UPDATE.bin)" "$(sh VOTOL_S3_APP_UPDATE.bin)" \
+            "$(sz VOTOL_S3_40_APP_UPDATE.bin)" "$(sh VOTOL_S3_40_APP_UPDATE.bin)" > out/version.json
           cat out/version.json
       - name: Publish to firmware-build branch
         if: always()
         run: |
-          git config user.name "voltol-ci"
-          git config user.email "voltol-ci@users.noreply.github.com"
+          git config user.name "votol-ci"
+          git config user.email "votol-ci@users.noreply.github.com"
           BR=firmware-build; [ "${GITHUB_REF_NAME}" = main ] || BR=firmware-dev   # dev builds never reach boards' OTA
           git checkout --orphan $BR
           git read-tree --empty

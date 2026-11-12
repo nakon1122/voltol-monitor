@@ -1,5 +1,5 @@
 #include <new>
-// VOLTOL Monitor - dashboard, logger, 402 m timer and parameter tuner for
+// VOTOL Monitor - dashboard, logger, 402 m timer and parameter tuner for
 // VOTOL EM-series controllers on the ESP32-3248S035 (CYD 3.5").
 #include <Arduino.h>
 #include <ArduinoJson.h>  // before i18n.h: its T() macro clashes with template names
@@ -61,7 +61,7 @@ static void shortWhen(char *out, int n) {  // "03 Nov 18:42"
 static const uint8_t CFG_VER = 5;
 static void loadSettings() {
   Preferences p;
-  p.begin("voltol", true);
+  p.begin("votol", true);
   if (p.getUChar("cfgv", 0) == CFG_VER) p.getBytes("cfg", &cfg, sizeof cfg);
   p.end();
   if (cfg.dragTarget > 2) cfg.dragTarget = 1;  // field added in v1.8.0 (older settings: 402 m)
@@ -70,7 +70,7 @@ static void loadSettings() {
 static uint32_t cfgDirtyAt = 0;
 static void saveSettings() {
   Preferences p;
-  p.begin("voltol", false);
+  p.begin("votol", false);
   p.putUChar("cfgv", CFG_VER);
   p.putBytes("cfg", &cfg, sizeof cfg);
   p.end();
@@ -102,14 +102,14 @@ static void saveTrip() {
   t.maxKmh = S.trip.maxKmh; t.maxA = S.trip.maxA; t.secs = (millis() - tripStartMs) / 1000;
   t.odoKm = odoBase + S.trip.distM / 1000;
   Preferences p;
-  p.begin("voltol", false);
+  p.begin("votol", false);
   p.putBytes("trip", &t, sizeof t);
   p.end();
 }
 // Close the trip stored in flash (previous power-on or "NEW TRIP") and start a new one.
 static void newTrip(bool fromBoot) {
   Preferences p;
-  p.begin("voltol", false);
+  p.begin("votol", false);
   TripSnap t;
   if (fromBoot && p.getBytes("trip", &t, sizeof t) == sizeof t) {
     odoBase = t.odoKm;
@@ -117,7 +117,7 @@ static void newTrip(bool fromBoot) {
   } else if (!fromBoot) {
     p.end();
     saveTrip();
-    p.begin("voltol", false);
+    p.begin("votol", false);
     if (p.getBytes("trip", &t, sizeof t) == sizeof t && t.distM > 50) logger::tripRow(snapRow(t));
     odoBase += S.trip.distM / 1000;
   }
@@ -161,7 +161,7 @@ static void loadBest() {  // S.best = best run of the chosen distance
   char k[8], kw[8];
   snprintf(k, sizeof k, "bst%d", ti); snprintf(kw, sizeof kw, "bsw%d", ti);
   Preferences p;
-  p.begin("voltol", false);
+  p.begin("votol", false);
   if (!p.isKey("bstm")) {  // one-time move of the old 402 m best
     OldDragResult o;
     if (p.getBytes("best", &o, sizeof o) == sizeof o && o.s[3].done) {
@@ -187,7 +187,7 @@ static void saveBest(const ride::DragResult &r, const char *when) {
   int ti = ride::targetIx(r.n);
   snprintf(k, sizeof k, "bst%d", ti); snprintf(kw, sizeof kw, "bsw%d", ti);
   Preferences p;
-  p.begin("voltol", false);
+  p.begin("votol", false);
   p.putBytes(k, &r, sizeof r);
   p.putString(kw, when);
   p.end();
@@ -543,7 +543,7 @@ static String paramsCloudJson() {
   J j;
   j.b("have", have).b("busy", S.busy).t("when", S.paramsWhen).i("sum", have ? S.params.checkSum() : 0)
    .t("msg", S.msg).i("kind", S.msgKind).b("stopped", S.linked && S.live.rpm == 0).b("linked", S.linked)
-   .b("cloudTune", cfg.cloudTune).t("fw", VOLTOL_FW).raw("defs", defs + "]").raw("fields", fl + "]").raw("backups", bk + "]")
+   .b("cloudTune", cfg.cloudTune).t("fw", VOTOL_FW).raw("defs", defs + "]").raw("fields", fl + "]").raw("backups", bk + "]")
    .raw("prof", profJson());
   return j.obj();
 }
@@ -576,7 +576,7 @@ static void setPut(int i, int v) {
   case 0: cfg.dash = v; break; case 1: cfg.speedSrc = v; break; case 2: cfg.logRate = v; break; case 3: cfg.cells = v; break;
   case 4: cfg.cellEmptyMv = v; break; case 5: cfg.cellFullMv = v; break; case 6: cfg.maxKmh = v; break;
   case 7: cfg.maxAmp = v; break; case 8: cfg.backlight = v; break;
-#ifdef VOLTOL_HEADLESS
+#ifdef VOTOL_HEADLESS
   case 9: cfg.wifi = 1; break;  // the web page is the only screen
 #else
   case 9: cfg.wifi = v; break;
@@ -594,7 +594,7 @@ static void setPut(int i, int v) {
 // ---- launch profiles (Street / Launch) ----
 static void saveProf() {
   Preferences p;
-  p.begin("voltol", false);
+  p.begin("votol", false);
   p.putBytes("prof", &S.prof, sizeof S.prof);
   p.end();
 }
@@ -622,7 +622,7 @@ static String profJson() {
 static String otaJson() {
   const ota::Status &o = ota::status();
   J j;
-  j.t("version", VOLTOL_FW).b("netOn", ota::staConfigured()).t("ssid", ota::staSsid()).b("connected", o.connected)
+  j.t("version", VOTOL_FW).b("netOn", ota::staConfigured()).t("ssid", ota::staSsid()).b("connected", o.connected)
    .t("ip", o.ip).b("available", o.available).t("latest", o.latest).i("state", o.state).i("progress", o.progress)
    .t("msg", o.msg).b("rolledBack", o.rolledBack);
   return j.obj();
@@ -631,7 +631,7 @@ static String settingsJson() {
   J j;
   for (int i = 0; i < (int)(sizeof SETS / sizeof SETS[0]); i++) j.i(SETS[i].k, setGet(i));
   j.n("circMm", cfg.circMm(), 0).n("kmhAt1000", ride::rpmToKmh(1000, cfg.circMm(), cfg.ratioX100 / 100.0f));
-#ifdef VOLTOL_HEADLESS
+#ifdef VOTOL_HEADLESS
   j.b("headless", true);
 #else
   j.b("headless", false);
@@ -654,7 +654,7 @@ static void jstr(String &o, const char *s) {
 static uint32_t cloudScanAt = 0;  // Wi-Fi scan asked from the cloud page: results go up for 2 minutes
 // v1.8.3: samples stay in the ring until the cloud accepted them (a failed upload or a Wi-Fi
 // drop-out no longer loses part of a drag trace); 60 s of a run on S3 boards, 15 s on the CYD.
-#if defined(VOLTOL_CYD35) || (!defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5))
+#if defined(VOTOL_CYD35) || (!defined(VOTOL_HEADLESS) && !defined(VOTOL_S340) && !defined(VOTOL_P4C5))
 static const int FR_N = 300;
 #else
 static const int FR_N = 600;    // 30 s of a run (uploads go out every 0.5 s; this only covers drop-outs)
@@ -724,12 +724,12 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
   moving = rpm != 0 || drag.state == ride::DragTimer::RUN;
   char b[640];
   snprintf(b, sizeof b,
-           "{\"firmware\":\"" VOLTOL_FW "\",\"board\":\"%s\",\"controller_online\":%s,\"wifi_online\":true,\"wifi_rssi\":%d,"
+           "{\"firmware\":\"" VOTOL_FW "\",\"board\":\"%s\",\"controller_online\":%s,\"wifi_online\":true,\"wifi_rssi\":%d,"
            "\"uart_baud\":%lu,\"uart_hz\":%.1f,\"valid_frames\":%lu,\"bad_frames\":%lu,"
            "\"speed_kmh\":%.1f,\"voltage\":%.1f,\"current\":%.1f,\"power_kw\":%.2f,\"soc\":%d,"
            "\"controller_temp_c\":%d,\"motor_temp_c\":%d,\"fault_mask\":%lu,\"gear\":\"%c\","
            "\"gps\":{\"fix\":%s,\"sats\":%d},\"hotspot_clients\":%d,\"uptime_s\":%lu,",
-           VOLTOL_BOARD,
+           VOTOL_BOARD,
            ctl ? "true" : "false", net::rssi(), (unsigned long)S.baud, S.hz, (unsigned long)S.frames, (unsigned long)S.errors,
            S.speedOk ? S.kmh : 0.0f, ctl ? S.live.volt : 0.0f, ctl ? S.live.amp : 0.0f, ctl ? S.kw : 0.0f, S.soc,
            ctl ? S.live.tCtrl : 0, ctl ? S.live.tMotor : 0, (unsigned long)(ctl ? S.live.faults : 0),
@@ -936,7 +936,7 @@ static String api(const String &path, const std::function<String(const char *)> 
   else if (path == "/api/wifi/scan") { if (!net::scanBusy()) net::scanStart(); out = wifiJson(); }
   else if (path == "/api/pair/start") {
     String code = blesetup::startGrant();
-    out = "{\"code\":\"" + code + "\",\"url\":\"https://voltol.battlab.net/#pair=" + code + "\",\"left\":180}";
+    out = "{\"code\":\"" + code + "\",\"url\":\"https://votol.battlab.net/#pair=" + code + "\",\"left\":180}";
   } else if (path == "/api/cloud") out = cloudJson();
   else if (path == "/api/ble") { blesetup::setEnabled(arg("on") == "1"); out = cloudJson(); }
   else if (path == "/api/cloud/token") {
@@ -983,14 +983,85 @@ static const char *updateGuard() {
   return nullptr;
 }
 
+// ------------------------------------------------------- name change ----
+// v1.8.6 renamed the project VOLTOL -> VOTOL, including the settings storage. Copy every saved value
+// (Wi-Fi, cloud code, wheel, settings, display, update state) from the old names once, so nothing is lost.
+// The old entries stay as they were (an older firmware still finds its settings after a rollback).
+#include <esp_idf_version.h>
+#include <nvs.h>
+#include <nvs_flash.h>
+static void copyNs(const char *from, const char *to) {
+  nvs_handle_t src, dst;
+  if (nvs_open(from, NVS_READONLY, &src) != ESP_OK) return;
+  if (nvs_open(to, NVS_READWRITE, &dst) != ESP_OK) { nvs_close(src); return; }
+#if ESP_IDF_VERSION_MAJOR >= 5
+  nvs_iterator_t it = nullptr;
+  esp_err_t e = nvs_entry_find("nvs", from, NVS_TYPE_ANY, &it);
+  while (e == ESP_OK && it) {
+#else
+  nvs_iterator_t it = nvs_entry_find("nvs", from, NVS_TYPE_ANY);
+  while (it) {
+#endif
+    nvs_entry_info_t in;
+    nvs_entry_info(it, &in);
+    const char *k = in.key;
+    switch (in.type) {
+    case NVS_TYPE_U8: { uint8_t v; if (nvs_get_u8(src, k, &v) == ESP_OK) nvs_set_u8(dst, k, v); break; }
+    case NVS_TYPE_I8: { int8_t v; if (nvs_get_i8(src, k, &v) == ESP_OK) nvs_set_i8(dst, k, v); break; }
+    case NVS_TYPE_U16: { uint16_t v; if (nvs_get_u16(src, k, &v) == ESP_OK) nvs_set_u16(dst, k, v); break; }
+    case NVS_TYPE_I16: { int16_t v; if (nvs_get_i16(src, k, &v) == ESP_OK) nvs_set_i16(dst, k, v); break; }
+    case NVS_TYPE_U32: { uint32_t v; if (nvs_get_u32(src, k, &v) == ESP_OK) nvs_set_u32(dst, k, v); break; }
+    case NVS_TYPE_I32: { int32_t v; if (nvs_get_i32(src, k, &v) == ESP_OK) nvs_set_i32(dst, k, v); break; }
+    case NVS_TYPE_U64: { uint64_t v; if (nvs_get_u64(src, k, &v) == ESP_OK) nvs_set_u64(dst, k, v); break; }
+    case NVS_TYPE_I64: { int64_t v; if (nvs_get_i64(src, k, &v) == ESP_OK) nvs_set_i64(dst, k, v); break; }
+    case NVS_TYPE_STR: {
+      size_t n = 0;
+      if (nvs_get_str(src, k, nullptr, &n) == ESP_OK && n) { char *b = (char *)malloc(n); if (b) { if (nvs_get_str(src, k, b, &n) == ESP_OK) nvs_set_str(dst, k, b); free(b); } }
+      break;
+    }
+    case NVS_TYPE_BLOB: {
+      size_t n = 0;
+      if (nvs_get_blob(src, k, nullptr, &n) == ESP_OK && n) { void *b = malloc(n); if (b) { if (nvs_get_blob(src, k, b, &n) == ESP_OK) nvs_set_blob(dst, k, b, n); free(b); } }
+      break;
+    }
+    default: break;
+    }
+#if ESP_IDF_VERSION_MAJOR >= 5
+    e = nvs_entry_next(&it);
+  }
+  nvs_release_iterator(it);
+#else
+    it = nvs_entry_next(it);
+  }
+#endif
+  nvs_commit(dst);
+  nvs_close(dst);
+  nvs_close(src);
+}
+static void migrateOldName() {
+  nvs_flash_init();
+  Preferences p;
+  p.begin("votol", true);
+  bool done = p.getUChar("renamed", 0) == 1;
+  p.end();
+  if (done) return;
+  static const char *const OLD[6][2] = {{"vol" "tol", "votol"}, {"vol" "tol-ble", "votol-ble"}, {"vol" "tol-cloud", "votol-cloud"},
+                                        {"vol" "tol-disp", "votol-disp"}, {"vol" "tol-net", "votol-net"}, {"vol" "tol-ota", "votol-ota"}};
+  for (auto &m : OLD) copyNs(m[0], m[1]);
+  p.begin("votol", false);
+  p.putUChar("renamed", 1);
+  p.end();
+}
+
 void setup() {
+  migrateOldName();  // before anything reads its settings
   ota::bootCheck();  // boot-loop protection after an update
   Serial.begin(115200);
   lock = xSemaphoreCreateMutex();
   loadSettings();
   displayBegin();
   displayBacklight(cfg.backlight);
-  S.fw = "VOLTOL Monitor " VOLTOL_FW;
+  S.fw = "VOTOL Monitor " VOTOL_FW;
   S.drag = &drag;
   ui::go(PG_BOOT);
   ui::draw(displayGfx(), S, cfg);
@@ -1003,7 +1074,7 @@ void setup() {
   applyTarget();
   {
     Preferences p;
-    p.begin("voltol", true);
+    p.begin("votol", true);
     p.getBytes("prof", &S.prof, sizeof S.prof);
     p.end();
   }
@@ -1011,11 +1082,11 @@ void setup() {
   Serial1.begin(GPS_BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   web::begin(api, setClock);
   web::setLive([] { LOCK(); String o = liveJsonLocked(); UNLOCK(); return o; }, [] { return vlink::goodFrames(); });
-#ifdef VOLTOL_HEADLESS
+#ifdef VOTOL_HEADLESS
   cfg.wifi = 1;
 #endif
   net::begin(cfg.wifi);
-  ota::begin(VOLTOL_BOARD, updateGuard);
+  ota::begin(VOTOL_BOARD, updateGuard);
   web::enable(cfg.wifi);
   cloud::begin(cloudPayload, cloudCmd);
   cloud::setAck(frAck);
@@ -1046,7 +1117,7 @@ static void doActions(UiActions &a) {
   if (a.armDrag) { armDrag(); dragSaved = -1; }
   if (a.cancelDrag) { drag.cancel(); S.dragWaitGps = false; }
   if (a.settingsChanged) {
-#ifdef VOLTOL_HEADLESS
+#ifdef VOTOL_HEADLESS
     cfg.wifi = 1;
 #endif
     cfgDirtyAt = millis(); displayBacklight(cfg.backlight); web::enable(cfg.wifi);

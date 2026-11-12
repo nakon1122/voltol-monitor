@@ -10,7 +10,7 @@
 #include "ota.h"
 
 namespace cloud {
-static const char *BASE = "https://zpsxcdzkayqhzbdcdoed.supabase.co/functions/v1/voltol-device/";
+static const char *BASE = "https://zpsxcdzkayqhzbdcdoed.supabase.co/functions/v1/votol-device/";
 static char token[65] = "";
 static volatile int httpCode = 0;
 static volatile uint32_t okAt = 0;
@@ -33,7 +33,7 @@ bool setToken(const char *t) {
   token[64] = 0;
   xSemaphoreGive(mtx);
   Preferences p;
-  p.begin("voltol-cloud", false);  // same place as v1.6.x: existing pairings keep working
+  p.begin("votol-cloud", false);  // same place as v1.6.x: existing pairings keep working
   p.putString("token", token);
   p.end();
   okAt = 0;
@@ -44,7 +44,7 @@ void forget() {
   token[0] = 0;
   xSemaphoreGive(mtx);
   Preferences p;
-  p.begin("voltol-cloud", false);
+  p.begin("votol-cloud", false);
   p.remove("token");
   p.end();
 }
@@ -168,7 +168,7 @@ void begin(PayloadFn p, CmdFn c) {
   payloadFn = p;
   cmdFn = c;
   Preferences pr;
-  pr.begin("voltol-cloud", true);
+  pr.begin("votol-cloud", true);
   String t = pr.getString("token", "");
   pr.end();
   if (validHex(t.c_str())) strlcpy(token, t.c_str(), sizeof token);

@@ -22,7 +22,7 @@ extern "C" bool verifyRollbackLater() { return true; }
 
 namespace ota {
 static const char *HOST = "raw.githubusercontent.com";
-static const char *PATH = "/nakon1122/voltol-monitor/firmware-build/firmware/";
+static const char *PATH = "/nakon1122/votol-monitor/firmware-build/firmware/";
 static Status st;
 static GuardFn guard = nullptr;
 static const char *board = "cyd35";
@@ -38,7 +38,7 @@ static void say(const char *fmt, const char *arg = "") {
 // ------------------------------------------------------------ rollback ----
 void bootCheck() {
   Preferences p;
-  p.begin("voltol-ota", false);
+  p.begin("votol-ota", false);
   st.rolledBack = p.getBool("rolled", false);
   if (p.getBool("pend", false)) {
     uint8_t n = p.getUChar("boots", 0) + 1;
@@ -57,7 +57,7 @@ void bootCheck() {
 }
 void markPending() {
   Preferences p;
-  p.begin("voltol-ota", false);
+  p.begin("votol-ota", false);
   p.putBool("pend", true);
   p.putUChar("boots", 0);
   p.putBool("rolled", false);
@@ -65,7 +65,7 @@ void markPending() {
 }
 static void markGood() {
   Preferences p;
-  p.begin("voltol-ota", false);
+  p.begin("votol-ota", false);
   if (p.getBool("pend", false)) { p.putBool("pend", false); p.putUChar("boots", 0); }
   p.end();
   esp_ota_mark_app_valid_cancel_rollback();
@@ -99,7 +99,7 @@ static long get(WiFiClientSecure &c, const String &path) {
   c.setCACertBundle(CLOUD_CA_BUNDLE);
   c.setTimeout(15);
   if (!c.connect(HOST, 443)) return -1;
-  c.printf("GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: voltol-monitor\r\nConnection: close\r\n\r\n", path.c_str(), HOST);
+  c.printf("GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: votol-monitor\r\nConnection: close\r\n\r\n", path.c_str(), HOST);
   String line = c.readStringUntil('\n');
   if (line.indexOf(" 200") < 0) return -2;
   long len = -3;
@@ -130,7 +130,7 @@ static void doCheck() {
   wantSha = field(js, b, "sha256");
   wantSize = field(js, b, "size").toInt();
   strlcpy(st.latest, ver.c_str(), sizeof st.latest);
-  st.available = cmpVer(VOLTOL_FW, st.latest) < 0;
+  st.available = cmpVer(VOTOL_FW, st.latest) < 0;
   st.state = S_IDLE;
   say(st.available ? "Version %s available" : "Up to date (%s)", st.latest);
 }

@@ -19,7 +19,7 @@ void flush();
 void tripRow(const TripRow &t);
 void dragRow(const DragRow &r);
 int loadTrips(TripRow *rows, int max);
-#if !defined(VOLTOL_HEADLESS) && !defined(VOLTOL_S340) && !defined(VOLTOL_P4C5)
+#if !defined(VOTOL_HEADLESS) && !defined(VOTOL_S340) && !defined(VOTOL_P4C5)
 static const int DRAG_ROWS_MAX = 100;   // CYD: small RAM
 #else
 static const int DRAG_ROWS_MAX = 300;

@@ -47,8 +47,8 @@ static ride::DragResult runResult(double a, double vmax, double tEnd, ride::Drag
 
 int main(int argc, char **argv) {
   if (argc > 1 && !strcmp(argv[1], "en")) { cfg.lang = 1; prefix = "en_"; }
-  s.fw = "VOLTOL Monitor 1.0.0";
-  strcpy(s.ssid, "VOLTOL-3F2A"); strcpy(s.ip, "http://192.168.4.1");
+  s.fw = "VOTOL Monitor 1.0.0";
+  strcpy(s.ssid, "VOTOL-3F2A"); strcpy(s.ip, "http://192.168.4.1");
   s.heapKB = 142; s.fsFreeKB = 512; s.fsTotalKB = 640; strcpy(s.clock, "18:42");
   s.drag = &drag;
   // ---- boot
@@ -198,19 +198,19 @@ int main(int argc, char **argv) {
   s.updState = 2; s.updProgress = 62; shot("27_info_downloading");
   // ---- internet Wi-Fi picked on the screen
   {
-    const WifiNet nets[6] = {{"Home-WiFi", -48, true, true}, {"VOLTOL-Garage", -58, true, false}, {"TrueMove-5G-7A21", -66, true, false},
+    const WifiNet nets[6] = {{"Home-WiFi", -48, true, true}, {"VOTOL-Garage", -58, true, false}, {"TrueMove-5G-7A21", -66, true, false},
                              {"AIS_Fibre_2.4G", -71, true, false}, {"Cafe Free WiFi", -77, false, false}, {"iPhone ของต้น", -83, true, false}};
     for (int i = 0; i < 6; i++) s.wifiNets[i] = nets[i];
     s.wifiN = 6;
     ui::page = PG_WIFI; shot("28_wifi_list");
     s.netConnected = false; s.netOn = false; s.wifiScanning = true; s.wifiN = 3; shot("29_wifi_scanning");
     s.wifiScanning = false; s.wifiN = 6;
-    ui::kbPreset("VOLTOL-Garage", "voltol2026", 0, false); ui::page = PG_KEYB; shot("30_wifi_keyboard");
-    ui::kbPreset("VOLTOL-Garage", "Volt@#2026", 2, true); shot("31_wifi_keyboard_symbols");
+    ui::kbPreset("VOTOL-Garage", "votol2026", 0, false); ui::page = PG_KEYB; shot("30_wifi_keyboard");
+    ui::kbPreset("VOTOL-Garage", "Volt@#2026", 2, true); shot("31_wifi_keyboard_symbols");
     s.netOn = true; s.netConnected = true; strcpy(s.netSsid, "Home-WiFi"); strcpy(s.netIp, "192.168.1.57");
   }
   {  // cloud setup page: Bluetooth pairing steps (S3 boards) and the CYD route
-    strcpy(s.ssid, "VOLTOL-7A21");
+    strcpy(s.ssid, "VOTOL-7A21");
     ui::tick(700);
     ui::page = PG_PAIR;
     s.cloudCfg = false; s.cloudOk = false; s.netConnected = false; s.netSsid[0] = 0;

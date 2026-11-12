@@ -6,7 +6,7 @@
 #include "display.h"
 #include "vlw_metrics.h"
 
-#if defined(VOLTOL_S340)
+#if defined(VOTOL_S340)
 // ESP32-S3 4.0" IPS (ES3C40P): ST7796S on SPI2, reset tied to EN, FT6336 capacitive touch on I2C.
 class LGFX : public lgfx::LGFX_Device {
   lgfx::Panel_ST7796 panel_;
@@ -233,12 +233,12 @@ bool displayTouch(int &x, int &y) {
   x = tx; y = ty;
   return true;
 }
-#if defined(VOLTOL_S340)
+#if defined(VOTOL_S340)
 // Capacitive touch needs no calibration. The Setup button flips the IPS colour
 // inversion instead (panels of this size ship both ways); the choice is saved.
 void displayCalibrate(bool force) {
   Preferences p;
-  p.begin("voltol-disp", false);
+  p.begin("votol-disp", false);
   bool inv = p.getBool("inv", true);
   if (force) { inv = !inv; p.putBool("inv", inv); }
   p.end();
@@ -248,7 +248,7 @@ void displayCalibrate(bool force) {
 #else
 void displayCalibrate(bool force) {
   Preferences p;
-  p.begin("voltol-disp", false);
+  p.begin("votol-disp", false);
   uint16_t cal[8];
   bool have = p.getBytes("cal", cal, sizeof cal) == sizeof cal;
   if (have && !force) {

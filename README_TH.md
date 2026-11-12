@@ -1,13 +1,13 @@
-# VOLTOL Monitor
+# VOTOL Monitor
 
 หน้าปัด + เครื่องบันทึก + จับเวลา 402 m + จูนพารามิเตอร์ สำหรับกล่องคอนโทรลเลอร์ **VOTOL EM-series**
 (โปรโตคอลถอดจากโปรแกรมจูนทางการ EM_V3-40 / EM_V3-EMsport)
 
 | บอร์ด | ไฟล์ | ใช้งาน |
 |---|---|---|
-| **ESP32-3248S035 (CYD 3.5", ทัช resistive)** | `VOLTOL_CYD35_*.bin` | จอบนรถ + หน้าเว็บ |
-| **ESP32-S3 DevKitC-1 (flash 8 MB)** | `VOLTOL_S3_*.bin` | ไม่มีจอ ใช้หน้าเว็บบนมือถือทั้งหมด |
-| **ESP32-S3 จอ 480×320 ทัช capacitive (ES3C40P, flash 16 MB)** | `VOLTOL_S3_40_*.bin` | จอบนรถ + หน้าเว็บ · ไดอะแกรม `docs/wiring_S3_4inch.png` |
+| **ESP32-3248S035 (CYD 3.5", ทัช resistive)** | `VOTOL_CYD35_*.bin` | จอบนรถ + หน้าเว็บ |
+| **ESP32-S3 DevKitC-1 (flash 8 MB)** | `VOTOL_S3_*.bin` | ไม่มีจอ ใช้หน้าเว็บบนมือถือทั้งหมด |
+| **ESP32-S3 จอ 480×320 ทัช capacitive (ES3C40P, flash 16 MB)** | `VOTOL_S3_40_*.bin` | จอบนรถ + หน้าเว็บ · ไดอะแกรม `docs/wiring_S3_4inch.png` |
 
 ![screens](assets/screens/ALL_SCREENS.png)
 
@@ -88,7 +88,7 @@
 
 ## หน้าเว็บ (ทั้ง CYD และ ESP32-S3)
 
-เชื่อม Wi-Fi `VOLTOL-xxxx` (รหัส `voltol1234`) แล้วเปิด http://192.168.4.1
+เชื่อม Wi-Fi `VOTOL-xxxx` (รหัส `votol1234`) แล้วเปิด http://192.168.4.1
 แท็บ DASH (หน้าปัด A/B/C) · DRAG (ARM/ผลจับเวลา/ประวัติ) · LOG (กราฟ, ทริป, fault, ดาวน์โหลด CSV) ·
 TUNE (อ่าน/แก้/เขียนพารามิเตอร์ + backup/restore — เขียนได้เฉพาะ 0 RPM และต้องยืนยัน) · SETUP (ทุกค่าตั้ง + อัปเฟิร์มแวร์)
 หน้าเว็บตั้งนาฬิกาของบอร์ดจากมือถือให้อัตโนมัติ

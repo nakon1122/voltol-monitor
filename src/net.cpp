@@ -22,7 +22,7 @@ static const uint32_t RETRY_MS = 10000, TRY_MS = 15000;
 
 static void persist() {
   Preferences p;
-  p.begin("voltol-net", false);
+  p.begin("votol-net", false);
   p.putUChar("count", n);
   for (int i = 0; i < MAX_NETS; i++) {
     char ks[6], kp[6];
@@ -37,7 +37,7 @@ static void persist() {
 }
 static void load() {
   Preferences p;
-  p.begin("voltol-net", true);
+  p.begin("votol-net", true);
   // v1.6.x saved s0..s7 without a count: read every slot when "count" is missing
   int c = p.isKey("count") ? p.getUChar("count", 0) : MAX_NETS;
   if (c > MAX_NETS) c = MAX_NETS;
@@ -86,7 +86,7 @@ void hotspot(bool on) {
   if (on) {
     uint8_t mac[6];
     WiFi.macAddress(mac);
-    snprintf(apName, sizeof apName, "VOLTOL-%02X%02X", mac[4], mac[5]);
+    snprintf(apName, sizeof apName, "VOTOL-%02X%02X", mac[4], mac[5]);
     // channel 1 at first; once the internet Wi-Fi joins, the radio (and the hotspot) follow its channel
     WiFi.softAP(apName, AP_PASSWORD, 1, 0, 4);
     WiFi.setTxPower(WIFI_POWER_19_5dBm);

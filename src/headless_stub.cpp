@@ -1,7 +1,7 @@
 // ESP32-S3 build without a screen: the web page is the user interface, so the
 // display and on-screen UI become no-ops (src/display.cpp, src/ui.cpp and the
 // fonts are not compiled in this build - see platformio.ini).
-#ifdef VOLTOL_HEADLESS
+#ifdef VOTOL_HEADLESS
 #include "display.h"
 #include "ui.h"
 

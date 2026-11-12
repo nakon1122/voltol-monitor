@@ -9,7 +9,7 @@ const live = (o = {}) => Object.assign({
   linked: true, speedOk: true, kmh: 62.4, rpm: 539, volt: 78.4, amp: 48.6, kw: 3.81, soc: 85, tc: 42, tm: 55, gear: 'H',
   status: 'RUN', faults: 0, fault: 'None', hz: 10.2, baud: 9600, src: 0,
   gps: { seen: true, fix: true, ubx: true, sats: 14, hz: 25, acc: 0.3 },
-  trip: { km: 12.4, max: 98, avg: 37, maxA: 186, wh: 508, whkm: 41 }, odo: 1284, fw: 'VOLTOL Monitor 1.8.0', sd: false,
+  trip: { km: 12.4, max: 98, avg: 37, maxA: 186, wh: 508, whkm: 41 }, odo: 1284, fw: 'VOTOL Monitor 1.8.0', sd: false,
   freeKB: 512, maxKmh: 120, maxAmp: 200, dash: 0,
   drag: { state: 'IDLE', el: 0, dist: 0, spd: 0, gps: false, wait: false, roll: false, n: 4, target: 1, bestN: 4, sp: [sp(0), sp(0), sp(0), sp(0), sp(0)].map(x => ({ ...x, v: 0, a: 0 })), peakA: 0, peakKw: 0, spin: false, spinCorr: false, maxSlip: 0, slipOk: false, slip: 0, hybrid: false, haveBest: true, best, bestWhen: '03 Nov 18:12' },
 }, o);
@@ -74,7 +74,7 @@ async function shot(page, name, liveObj, setup) {
     if (u.pathname === '/api/files') return json([{ n: '/log/T0042_detail.csv', s: 212300 }, { n: '/log/T0042_sec.csv', s: 31800 }, { n: '/faults.csv', s: 4200 }, { n: '/trips.csv', s: 900 }, { n: '/drag2.csv', s: 720 }, { n: '/drag.csv', s: 320 }]);
     return json({});
   });
-  await page.goto('http://voltol.local/');
+  await page.goto('http://votol.local/');
   await page.waitForTimeout(400);
   if (setup) await setup(page);
   await page.waitForTimeout(500);
@@ -114,7 +114,7 @@ async function shot(page, name, liveObj, setup) {
   await shot(ep, 'web_en_09_setup', live(), tab('setup'));
   // ---- ESP32-S3 (no screen): the web page is the whole user interface
   SET = { ...settings, headless: true };
-  const s3 = o => live({ fw: 'VOLTOL Monitor 1.7.5 (ESP32-S3)', ...o });
+  const s3 = o => live({ fw: 'VOTOL Monitor 1.7.5 (ESP32-S3)', ...o });
   await shot(page, 's3web_01_dash_A', s3(), style(0));
   await shot(page, 's3web_02_dash_B', s3({ kmh: 87, rpm: 752, amp: 132, kw: 10.1 }), style(1));
   await shot(page, 's3web_03_dash_C', s3({ kmh: 105, rpm: 908, amp: 172, kw: 13.3, gear: 'S' }), style(2));

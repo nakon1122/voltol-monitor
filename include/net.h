@@ -1,4 +1,4 @@
-// Wi-Fi for VOLTOL Monitor: the board's own hotspot "VOLTOL-xxxx" (always on)
+// Wi-Fi for VOTOL Monitor: the board's own hotspot "VOTOL-xxxx" (always on)
 // plus up to 8 saved home / phone-hotspot networks for the internet.
 //
 // Hotspot stays usable while the internet Wi-Fi connects (fix for v1.6.x):

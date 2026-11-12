@@ -1,4 +1,4 @@
-// Wi-Fi hotspot "VOLTOL-xxxx" (password in config.h) with a small web page:
+// Wi-Fi hotspot "VOTOL-xxxx" (password in config.h) with a small web page:
 //   live values, download/delete of every log CSV and parameter backup,
 //   clock sync from the phone, and firmware update (.bin upload).
 // Realtime: port 81 /live is a Server-Sent-Events stream. Every new controller

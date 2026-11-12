@@ -1,4 +1,4 @@
-// VOLTOL Monitor screens. Pure drawing code (no Arduino): compiled for the
+// VOTOL Monitor screens. Pure drawing code (no Arduino): compiled for the
 // board and, unchanged, for the PC preview renderer (tools/sim/sim_main.cpp).
 #include "ui.h"
 #include "vlw_metrics.h"
@@ -180,8 +180,8 @@ static void gears(Gfx &g, int x, int y, int w, const UiState &s) {
 }
 static void brand(Gfx &g, int x, int y) {  // y = top of header
   bolt(g, x, y + 5, 1, YELLOW);
-  g.text(x + 16, y + 20, "VOLTOL", F13B, TEXT);
-  g.text(x + 16 + g.textWidth("VOLTOL", F13B) + 6, y + 20, "Monitor", F11, MUTED2);
+  g.text(x + 16, y + 20, "VOTOL", F13B, TEXT);
+  g.text(x + 16 + g.textWidth("VOTOL", F13B) + 6, y + 20, "Monitor", F11, MUTED2);
 }
 
 // Gauge band drawn in small slices so it can be updated incrementally
@@ -299,7 +299,7 @@ static void dashB(Gfx &g, const UiState &s, const Settings &c, bool full) {
   if (full) {
     g.fillRect(0, 0, 480, 320, BBG);
     bolt(g, 392, 29, 0.7f, YELLOW);
-    g.text(402, 40, "VOLTOL", F11B, TEXT);
+    g.text(402, 40, "VOTOL", F11B, TEXT);
     g.text(238, 190, "KM/H", F15B, MUTED2, AL_C);
   }
   // shift-light RPM bar
@@ -1039,7 +1039,7 @@ static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
     g.textMid(b.x + b.w - 21, b.y + 14, "+", F18B, TEXT, AL_C);
   }
   button(g, SB[0], "WHEEL"); button(g, SB[1],
-#if defined(VOLTOL_S340)
+#if defined(VOTOL_S340)
          "COLOURS"
 #else
          "TOUCH CAL"
@@ -1155,7 +1155,7 @@ static void infoPage(Gfx &g, const UiState &s) {
   infoLine(g, y, "GPS", t, s.gpsFix ? GREEN : TEXT);
   snprintf(t, sizeof t, T("%s · %u KB free · RAM %u KB"), s.sd ? T("SD card") : T("internal"), (unsigned)s.fsFreeKB, (unsigned)s.heapKB);
   infoLine(g, y, "Storage", t);
-#if defined(VOLTOL_S340)
+#if defined(VOTOL_S340)
   infoLine(g, y, "Wiring", "UART: VOTOL TX>RXD · RX<TXD · GPS TX>IO2", MUTED2);
 #else
   infoLine(g, y, "Wiring", "VOTOL TX>IO35 · RX<IO22 · GPS TX>IO21, RX<IO22", MUTED2);
@@ -1170,7 +1170,7 @@ static void infoPage(Gfx &g, const UiState &s) {
 static void bootPage(Gfx &g, const UiState &s) {
   g.fillRect(0, 0, 480, 320, BG);
   bolt(g, 196, 70, 4.2f, YELLOW);
-  g.text(240, 200, "VOLTOL", F38B, TEXT, AL_C);
+  g.text(240, 200, "VOTOL", F38B, TEXT, AL_C);
   g.text(240, 224, "MONITOR", F13B, MUTED2, AL_C);
   g.text(240, 268, "Connecting to VOTOL controller...", F13, SUB, AL_C);
   g.text(240, 300, s.fw, F10, MUTED, AL_C);
@@ -1394,17 +1394,17 @@ static PairView pairView(const UiState &s) {
     snprintf(pairSub[1], sizeof pairSub[1], T("Wi-Fi %s > 192.168.4.1"), s.ssid);
     v.sub[1] = s.cloudCfg ? "Linked" : pairSub[1];
     v.title[2] = "Data to Cloud";
-    v.sub[2] = done ? "Live on voltol.battlab.net" : "Waiting for steps 1-2";
+    v.sub[2] = done ? "Live on votol.battlab.net" : "Waiting for steps 1-2";
     v.st[0] = s.netConnected ? ST_DONE : ST_ACTIVE;
     v.st[1] = s.cloudCfg ? ST_DONE : s.netConnected ? ST_ACTIVE : ST_WAIT;
     v.st[2] = done ? ST_DONE : (s.netConnected && s.cloudCfg) ? ST_ACTIVE : ST_WAIT;
     v.disc = done ? 3 : (s.netConnected && s.cloudCfg) ? 2 : 0;
     v.head = done ? "Connected!" : (s.netConnected && s.cloudCfg) ? "Connecting..." : "Not linked yet";
-    v.line = done ? "See it on voltol.battlab.net" : "This screen has no Bluetooth";
+    v.line = done ? "See it on votol.battlab.net" : "This screen has no Bluetooth";
     return v;
   }
   v.title[0] = "Phone connects by Bluetooth";
-  v.sub[0] = "Phone: voltol.battlab.net > Add module";
+  v.sub[0] = "Phone: votol.battlab.net > Add module";
   v.title[1] = "Choose Wi-Fi on the phone";
   v.sub[1] = "Pick the Wi-Fi, enter its password";
   v.title[2] = "Module joins Wi-Fi";
@@ -1416,13 +1416,13 @@ static PairView pairView(const UiState &s) {
   v.window = win;
   if (!strcmp(b, "cloud-ok") || (done && !win && strcmp(b, "joining") && strcmp(b, "accepted") && strcmp(b, "online"))) {
     for (int i = 0; i < 4; i++) v.st[i] = ST_DONE;
-    v.disc = 3; v.head = "Connected!"; v.line = "See it on voltol.battlab.net";
+    v.disc = 3; v.head = "Connected!"; v.line = "See it on votol.battlab.net";
   } else if (win) {
     v.st[0] = s.blePhone ? ST_DONE : ST_ACTIVE;
     v.st[1] = s.blePhone ? ST_ACTIVE : ST_WAIT;
     v.disc = s.blePhone ? 2 : 1;
     v.head = s.blePhone ? "Phone connected" : "Waiting for phone";
-    v.line = s.blePhone ? "Enter the Wi-Fi on the phone" : "Bluetooth name: VOLTOL Setup";
+    v.line = s.blePhone ? "Enter the Wi-Fi on the phone" : "Bluetooth name: VOTOL Setup";
   } else if (!strcmp(b, "accepted") || !strcmp(b, "joining")) {
     v.st[0] = v.st[1] = ST_DONE; v.st[2] = ST_ACTIVE;
     v.disc = 2; v.head = "Joining Wi-Fi..."; v.line = "Takes up to 30 seconds";
