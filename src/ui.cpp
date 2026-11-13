@@ -1041,6 +1041,8 @@ static void setupPage(Gfx &g, const UiState &s, const Settings &c) {
   button(g, SB[0], "WHEEL"); button(g, SB[1],
 #if defined(VOTOL_S340)
          "COLOURS"
+#elif defined(VOTOL_P4C5)
+         "ROTATE"
 #else
          "TOUCH CAL"
 #endif
@@ -1156,7 +1158,9 @@ static void infoPage(Gfx &g, const UiState &s) {
   infoLine(g, y, "GPS", t, s.gpsFix ? GREEN : TEXT);
   snprintf(t, sizeof t, T("%s · %u KB free · RAM %u KB"), s.sd ? T("SD card") : T("internal"), (unsigned)s.fsFreeKB, (unsigned)s.heapKB);
   infoLine(g, y, "Storage", t);
-#if defined(VOTOL_S340)
+#if defined(VOTOL_P4C5)
+  infoLine(g, y, "Wiring", "Header: VOTOL TX>IO48 · RX<IO47 · GPS TX>IO46", MUTED2);
+#elif defined(VOTOL_S340)
   infoLine(g, y, "Wiring", "UART: VOTOL TX>RXD · RX<TXD · GPS TX>IO2", MUTED2);
 #else
   infoLine(g, y, "Wiring", "VOTOL TX>IO35 · RX<IO22 · GPS TX>IO21, RX<IO22", MUTED2);

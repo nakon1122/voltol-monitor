@@ -1,0 +1,58 @@
+name: Build P4C5
+on:
+  push:
+    branches: [p4c5]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  p4c5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio/libdeps
+          key: pio-p4c5-${{ hashFiles('platformio.ini') }}
+      - name: Install PlatformIO, esptool
+        run: pip install -q "platformio @ https://github.com/platformio/platformio-core/archive/refs/heads/develop.zip" esptool && pio --version
+      - name: Fetch board drivers
+        run: sh tools/fetch_p4_components.sh
+      - name: Build
+        run: |
+          set -o pipefail
+          mkdir -p out
+          python tools/embed_web.py
+          pio run -e p4c5 2>&1 | tee out/build_p4.log
+      - name: Make flash images
+        if: success()
+        run: |
+          B=.pio/build/p4c5
+          BOOT_APP0=$(find ~/.platformio/packages -name boot_app0.bin | head -1)
+          ls -la $B
+          python -m esptool --chip esp32p4 merge-bin -o out/VOTOL_P4C5_INSTALL.bin \
+            --flash-mode keep --flash-freq keep --flash-size 16MB \
+            0x2000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin
+          cp $B/firmware.bin out/VOTOL_P4C5_APP_UPDATE.bin
+          cp "$BOOT_APP0" out/BOOT_APP0.bin
+          grep -E "RAM:|Flash:" out/build_p4.log > out/SIZES.txt || true
+          (cd out && sha256sum *.bin > SHA256SUMS.txt)
+      - name: Publish to firmware-p4 branch
+        if: always()
+        run: |
+          git config user.name "votol-ci"
+          git config user.email "votol-ci@users.noreply.github.com"
+          git checkout --orphan firmware-p4
+          git read-tree --empty
+          mkdir -p firmware && cp out/* firmware/ 2>/dev/null || true
+          tail -c 60000 out/build_p4.log > firmware/build_tail.log 2>/dev/null || true
+          echo "${{ job.status }} ${GITHUB_SHA::7}" > firmware/STATUS.txt
+          git add -f firmware/
+          git commit -qm "p4c5 firmware for ${GITHUB_SHA::7} (${{ job.status }})"
+          git push -f origin firmware-p4

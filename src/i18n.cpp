@@ -135,7 +135,7 @@ static const Pair TH[] = {
     {"Tap a network below to join it", "แตะชื่อเครือข่ายด้านล่างเพื่อเชื่อม"}, {"Scanning...", "กำลังสแกน..."},
     {"No networks found. Tap SCAN.", "ไม่พบเครือข่าย กดสแกน"}, {"SCAN", "สแกน"}, {"FORGET", "ลืมเครือข่าย"},
     {"Password", "รหัสผ่าน"}, {"SHOW", "แสดง"}, {"HIDE", "ซ่อน"}, {"SPACE", "เว้นวรรค"}, {"CONNECT", "เชื่อมต่อ"},
-    {"DEL", "ลบ"}, {"SHIFT", "ตัวใหญ่"}, {"COLOURS", "สลับสีจอ"}, {"INFO", "ข้อมูล"},
+    {"DEL", "ลบ"}, {"SHIFT", "ตัวใหญ่"}, {"COLOURS", "สลับสีจอ"}, {"ROTATE", "หมุนจอ 180°"}, {"INFO", "ข้อมูล"},
     {"Tyre width (mm)", "หน้ากว้างยาง (มม.)"}, {"Tyre aspect (%)", "ซีรีส์ยาง (%)"}, {"Rim (inch)", "ขอบล้อ (นิ้ว)"},
     {"Correction (%)", "ปรับแก้ (%)"}, {"Gear ratio", "อัตราทด"}, {"WHEEL / SPEED", "ล้อ / ความเร็ว"},
     {"circumference", "เส้นรอบวง"}, {"at 1000 rpm", "ที่ 1000 รอบ"}, {"Tip: ride 100 m", "เคล็ดลับ: ขี่ 100 ม."},

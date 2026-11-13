@@ -2,7 +2,25 @@
 #pragma once
 #define VOTOL_FW "1.8.7"
 
-#if defined(VOTOL_S340)
+#if defined(VOTOL_P4C5)
+// ---- KSDIY ESP32-P4C5 4.3" MIPI board (ST7102 480x800 + ST7123 touch, C5 Wi-Fi, ML307C 4G) ----
+// 2x10 header (looking at the board, header at the top):
+//   top row:    DAC  GND  IO50 IO48 IO46 IO45 IO27 IO29 GND  RS485-B
+//   bottom row: 5V   3V3  IO49 IO47 GND  IO26 IO28 IO30 GND  RS485-A
+// VOTOL TX -> IO48, VOTOL RX <- IO47 (+ GPS RX), GND; GPS TX -> IO46, GPS VCC 3V3
+#define VOTOL_BOARD "p4c5"
+#define VOTOL_RX_PIN 48
+#define VOTOL_TX_PIN 47
+#define GPS_RX_PIN 46
+#define GPS_TX_PIN -1
+#define HAS_SD 2  // TF card on SDMMC slot 0 (IO_MUX pins)
+#define SDMMC_CLK 43
+#define SDMMC_CMD 44
+#define SDMMC_D0 39
+#define SDMMC_D1 40
+#define SDMMC_D2 41
+#define SDMMC_D3 42
+#elif defined(VOTOL_S340)
 // ---- ESP32-S3 4.0" 480x320 IPS (LCDwiki ES3C40P: ST7796 SPI + FT6336 touch) ----
 // VOTOL programming plug -> the 4-pin "UART" connector on the back (3.3 V logic):
 //   VOTOL TX -> RXD (GPIO44)   VOTOL RX <- TXD (GPIO43)   GND - GND

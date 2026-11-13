@@ -4,3 +4,4 @@ out/
 __pycache__/
 *.o
 /sim
+lib/ksdiy_*/

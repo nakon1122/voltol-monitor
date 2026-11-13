@@ -1,5 +1,6 @@
 // LovyanGFX driver for the ESP32-3248S035 + the Gfx back-end used by ui.cpp.
 // Panel/touch settings are the ones proven on the BattLab CYD35 firmware.
+#ifndef VOTOL_P4C5
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
 #include <Preferences.h>
@@ -269,3 +270,5 @@ void displayCalibrate(bool force) {
   gfx.font = -1;
 }
 #endif
+void displayFlush(bool) {}
+#endif  // !VOTOL_P4C5

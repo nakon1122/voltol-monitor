@@ -1059,6 +1059,7 @@ void setup() {
   ui::go(PG_BOOT);
   ui::draw(displayGfx(), S, cfg);
   displayCalibrate(false);
+  displayFlush(true);
   S.sd = logger::begin();
   newTrip(true);
   S.runN = logger::loadDrag(S.runs, 10);
@@ -1266,6 +1267,7 @@ void loop() {
     LOCK();
     ui::draw(displayGfx(), S, cfg);
     UNLOCK();
+    displayFlush(true);
     lastUpd = now;
   } else if (now - lastUpd >= 100 || (now - lastUpd >= 40 && vlink::goodFrames() != lastDrawFrames)) {
     // redraw as soon as a new controller frame arrived (up to 25 Hz), else 10 Hz
@@ -1274,6 +1276,7 @@ void loop() {
     LOCK();
     ui::update(displayGfx(), S, cfg);
     UNLOCK();
+    displayFlush(false);
   }
   // housekeeping
   if (now - lastFlush >= 2000) {
