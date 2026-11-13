@@ -9,17 +9,18 @@ py -3.11 -m pip install -q --disable-pip-version-check "esptool>=4.8.1,<5"
 if errorlevel 1 goto failed
 set /p VCOM=Enter COM port (e.g. COM7): 
 if not defined VCOM exit /b 1
-set EST=py -3.11 -m esptool --chip esp32p4 --port "%VCOM%"
+rem erase + write in ONE connection: no reset in between (USB boards drop the port on reset)
+set JOB=write_flash --erase-all 0x0 firmware\VOTOL_P4C5_INSTALL.bin
 
 echo.
-echo [1/3] Trying automatic download mode...
-%EST% --baud 460800 --before default_reset --connect-attempts 3 erase_flash
-if not errorlevel 1 goto write_fast
+echo [1/3] Automatic download mode...
+py -3.11 -m esptool --chip esp32p4 --port "%VCOM%" --baud 460800 --before default_reset --connect-attempts 3 %JOB%
+if not errorlevel 1 goto ok
 
 echo.
-echo [2/3] Trying the USB reset of the chip's own USB port...
-%EST% --baud 460800 --before usb_reset --connect-attempts 3 erase_flash
-if not errorlevel 1 goto write_fast
+echo [2/3] USB reset of the chip's own USB port...
+py -3.11 -m esptool --chip esp32p4 --port "%VCOM%" --baud 460800 --before usb_reset --connect-attempts 3 %JOB%
+if not errorlevel 1 goto ok
 
 echo.
 echo [3/3] Put the board in download mode by hand:
@@ -28,19 +29,9 @@ echo    2. Press and release RST (or unplug and plug the USB cable) while holdin
 echo    3. Release BOOT
 echo    (the COM number can change - check Device Manager)
 set /p VCOM=Enter the COM port again (Enter = %VCOM%): 
-set EST=py -3.11 -m esptool --chip esp32p4 --port "%VCOM%"
-%EST% --baud 115200 --before no_reset erase_flash
+py -3.11 -m esptool --chip esp32p4 --port "%VCOM%" --baud 115200 --before no_reset %JOB%
 if errorlevel 1 goto failed
-%EST% --baud 115200 --before no_reset write_flash 0x0 firmware\VOTOL_P4C5_INSTALL.bin
-if errorlevel 1 goto failed
-goto ok
 
-:write_fast
-%EST% --baud 460800 --before default_reset write_flash 0x0 firmware\VOTOL_P4C5_INSTALL.bin
-if errorlevel 1 (
-  %EST% --baud 115200 --before no_reset write_flash 0x0 firmware\VOTOL_P4C5_INSTALL.bin
-  if errorlevel 1 goto failed
-)
 :ok
 echo SUCCESS. Press RST on the board.
 pause
