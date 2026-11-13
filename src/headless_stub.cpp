@@ -19,6 +19,7 @@ static NullGfx nullGfx;
 void displayBegin() {}
 Gfx &displayGfx() { return nullGfx; }
 void displayBacklight(uint8_t) {}
+void displayFlush(bool) {}
 bool displayTouch(int &, int &) { return false; }
 void displayCalibrate(bool) {}
 
