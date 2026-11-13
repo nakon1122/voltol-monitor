@@ -1203,13 +1203,20 @@ static void migrateOldName() {
   p.end();
 }
 
+// start-up trace on the USB serial port (tools/serial_log.py records it)
+static void bootLog(const char *step) {
+  Serial.printf("[boot %6lu ms] %-18s heap %u KB, psram %u KB\n", (unsigned long)millis(), step,
+                (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getFreePsram() / 1024));
+}
 void setup() {
   migrateOldName();  // before anything reads its settings
   ota::bootCheck();  // boot-loop protection after an update
   Serial.begin(115200);
+  bootLog("start " VOTOL_FW);
   lock = xSemaphoreCreateMutex();
   loadSettings();
   displayBegin();
+  bootLog("display");
   displayBacklight(cfg.backlight);
   S.fw = "VOTOL Monitor " VOTOL_FW;
   S.drag = &drag;
@@ -1217,12 +1224,15 @@ void setup() {
   ui::draw(displayGfx(), S, cfg);
   displayCalibrate(false);
   displayFlush(true);
+  bootLog("boot screen shown");
   S.sd = logger::begin();
+  bootLog("storage");
   newTrip(true);
   S.runN = logger::loadDrag(S.runs, 10);
   S.faultN = logger::loadFaults(S.faults, 10);
   S.backupN = logger::loadBackups(S.backups, 10);
   applyTarget();
+  bootLog("logs loaded");
   {
     Preferences p;
     p.begin("votol", true);
@@ -1233,24 +1243,32 @@ void setup() {
   Serial1.begin(GpsSched::BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   web::begin(api, setClock);
   web::setLive([] { LOCK(); String o = liveJsonLocked(); UNLOCK(); return o; }, [] { return vlink::goodFrames(); });
+  bootLog("web");
 #ifdef VOTOL_HEADLESS
   cfg.wifi = 1;
 #endif
   net::begin(cfg.wifi);
+  bootLog("wifi");
   ota::begin(VOTOL_BOARD, updateGuard);
+  bootLog("ota");
   web::enable(cfg.wifi);
   cloud::begin(cloudPayload, cloudCmd);
+  bootLog("cloud");
   cloud::setAck([] { bool a = frAck(); bool b = bmAck(); return a || b; });
   bmslink::begin();
+  bootLog("bms");
   blesetup::begin(!cloud::configured(), onBleSetup);  // Bluetooth on all the time (setting) / 3-minute window for a new module
+  bootLog("ble setup");
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
+  bootLog("votol link");
   vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
   gpsSched.cfgAt = millis();
   delay(1200);
   // a new module waiting for its first Bluetooth setup: open the step-by-step setup page
   ui::go(strcmp(blesetup::state(), "boot-ready") ? PG_DASH : PG_PAIR);
   needFull = true;
+  bootLog("setup done");
 }
 
 // ------------------------------------------------------------------- loop ----
@@ -1310,6 +1328,12 @@ void loop() {
   frameSample(now);
   bmsLoop(now);
   UNLOCK();
+  static uint32_t beatAt = 0;
+  if (now - beatAt > 5000) {
+    beatAt = now;
+    Serial.printf("[run %6lu ms] page %d heap %u KB psram %u KB wifi %d bms %d\n", (unsigned long)now, (int)ui::page,
+                  (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getFreePsram() / 1024), (int)net::online(), (int)S.bms.link);
+  }
   cloud::serialLoop();
   if (restartAt && (int32_t)(now - restartAt) > 0) ESP.restart();
   ota::loop();

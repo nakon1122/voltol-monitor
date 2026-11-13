@@ -1,12 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo VOTOL Monitor - record the start-up messages of the P4 board (for checking a blank screen)
-set /p VCOM=Enter ESP32-P4 COM port (e.g. COM25): 
+echo VOTOL Monitor - record the start-up messages of the board (40 seconds)
+echo Plug in BOTH USB-C ports of the P4 board if you can (two COM numbers in Device Manager).
+set /p VCOM=Enter COM port(s), separated by a space (e.g. COM26 COM25): 
 if not defined VCOM exit /b 1
+echo The board restarts by itself now. If nothing appears, press RST once.
+py -3.11 tools\serial_log.py %VCOM%
 echo.
-echo Recording for 30 seconds. Press RST on the board NOW.
-py -3.11 -c "import serial,time,sys;p=serial.Serial(sys.argv[1],115200,timeout=0.2);p.dtr=False;p.rts=False;f=open('p4_log.txt','wb');t=time.time();exec('while time.time()-t<30:\n d=p.read(4096)\n if d: f.write(d); sys.stdout.write(d.decode(\'ascii\',\'replace\')); sys.stdout.flush()');f.close()" %VCOM%
-echo.
-echo Saved: p4_log.txt  (send this file)
+echo Send the file p4_log.txt from this folder.
 pause

@@ -146,7 +146,9 @@ void displayBegin() {
   p.begin("votol-disp", true);
   flip = p.getBool("flip", false);
   p.end();
-  panelOk = p4_panel_init() == 0;
+  int pr = p4_panel_init();
+  panelOk = pr == 0;
+  Serial.printf("[boot] p4 panel init %d, line buffer %s\n", pr, line ? "ok" : "MISSING");
   bars();
   ledcAttach(6, 10000, 10);
   ledcWrite(6, 800);
