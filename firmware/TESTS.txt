@@ -1,0 +1,20 @@
+proto_test: all passed
+drag worst split error: 0.0002 s
+GPS 25 Hz worst split error (with speed noise): 0.0208 s
+wheel spin 402 m error: raw 0.179 s, max-traction limited 0.012 s
+hybrid 402 m: 8.488 s (true 8.492)
+ride_test: all passed
+== VOTOL TX/RX auto swap ==
+wired as in the guide, first boot                                data after  0.97 s  saved=normal   wire fight 0.00 s  GPS setup sent 1
+wires swapped, first boot                                        data after  3.23 s  saved=swapped  wire fight 1.43 s  GPS setup sent 1
+wires swapped, later boots (remembered)                          data after  0.07 s  saved=swapped  wire fight 0.00 s  GPS setup sent 0
+wired as in the guide, but board remembered swapped (re-wired)   data after  3.23 s  saved=normal   wire fight 0.73 s  GPS setup sent 0
+wires swapped, controller switched on after 20 s                 data after  2.12 s  saved=swapped  wire fight 0.46 s  GPS setup sent 1
+wired as in the guide, controller switched on after 20 s         data after  0.17 s  saved=normal   wire fight 0.00 s  GPS setup sent 1
+
+== GPS (MAX-M10S) update rate ==
+wired as in the guide: first data 0.3 s, u-blox NAV-PVT, 10.0 updates/s, gaps 0.0 s
+VOTOL wires swapped:   first data 3.0 s, NMEA, 1.0 updates/s, gaps 0.0 s
+(old firmware, swapped: 0.60 updates/s, gaps 42.0 s in 90 s)
+
+ALL PASSED
