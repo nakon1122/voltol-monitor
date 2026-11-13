@@ -25,4 +25,5 @@ struct WriteResult { bool ok; char by[8]; char msg[96]; int n; int idx[16]; floa
 bool takeWrite(WriteResult &r);
 bool busy();                       // Bluetooth radio in use (pause during firmware download)
 void pause(bool on);
+unsigned stackFree();               // smallest free stack of the BMS task so far (bytes)
 }  // namespace bmslink

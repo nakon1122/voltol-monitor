@@ -6,6 +6,7 @@
 // Pure C++: the PC test (test/bms_test.cpp) drives it with recorded frames.
 #pragma once
 #include <math.h>
+#include <new>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,7 +39,8 @@ public:
   int writeN = 0, writeGood = 0;
 
   void reset(bool mainCh, bool jbdCh, bool dalyCh, bool peerAnt, uint8_t forced) {
-    *this = Engine();
+    this->~Engine();
+    new (this) Engine();  // in place: a temporary copy would put ~3 KB on the task stack
     hasMain = mainCh; hasJbd = jbdCh; hasDaly = dalyCh; antName = peerAnt;
     brand = forced;
     if (!brand && hasJbd) brand = bms::BR_JBD;  // service FF00 only exists on JBD

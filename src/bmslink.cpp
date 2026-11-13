@@ -319,7 +319,7 @@ void begin() {
   sh.savedBrand = p.getUChar("brand", 0);
   p.end();
   if (sh.mac[0]) sh.link = bms::L_CONNECT;
-  xTaskCreatePinnedToCore(task, "bms", 8192, nullptr, 1, &taskH, 0);
+  xTaskCreatePinnedToCore(task, "bms", 12288, nullptr, 1, &taskH, 0);  // same as BattLab's BLE worker
 }
 bool enabled() { Guard g; return sh.mac[0] || sh.link == bms::L_SCAN; }
 void scan() { Guard g; sh.reqScan = true; sh.link = bms::L_SCAN; }
@@ -392,6 +392,7 @@ bool takeWrite(WriteResult &r) {
   return true;
 }
 bool busy() { return radioOn; }
+unsigned stackFree() { return taskH ? uxTaskGetStackHighWaterMark(taskH) : 0; }
 void pause(bool on) { Guard g; sh.paused = on; }
 }  // namespace bmslink
 
@@ -407,6 +408,7 @@ const char *write(const int *, const float *, int, const char *) { return "this 
 bool poll(BmsUi &ui) { ui.link = bms::L_NOBLE; ui.have = false; return false; }
 bool takeWrite(WriteResult &) { return false; }
 bool busy() { return false; }
+unsigned stackFree() { return 0; }
 void pause(bool) {}
 }  // namespace bmslink
 #endif

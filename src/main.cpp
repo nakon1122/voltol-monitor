@@ -751,7 +751,7 @@ static void bmsPayload(String &o, uint32_t now) {  // under LOCK
   o += ",\"rssi\":" + String(b.rssi);
   if (b.have) {
     const bms::Live &L = b.live;
-    char t[200];
+    char t[320];
     snprintf(t, sizeof t, ",\"v\":%.2f,\"a\":%.1f,\"soc\":%.0f,\"rem\":%.1f,\"full\":%.1f,\"cyc\":%lu,\"t\":[%.0f,%.0f],\"mos\":%.0f,\"chg\":%s,\"dsg\":%s,\"bal\":%s,\"al\":%lu,\"balm\":%lu,\"age\":%.0f",
              L.volt, L.amp, L.soc, L.remainAh, L.fullAh, (unsigned long)L.cycles, L.temp[0], L.temp[1], L.mos, L.chg ? "true" : "false",
              L.dsg ? "true" : "false", L.bal ? "true" : "false", (unsigned long)L.alarms, (unsigned long)L.balMask, b.age);
@@ -1213,6 +1213,7 @@ void setup() {
   ota::bootCheck();  // boot-loop protection after an update
   Serial.begin(115200);
   bootLog("start " VOTOL_FW);
+  Serial.printf("[boot] last reset reason %d (4 panic, 5 int wdt, 6 task wdt, 7 wdt, 9 brownout)\n", (int)esp_reset_reason());
   lock = xSemaphoreCreateMutex();
   loadSettings();
   displayBegin();
@@ -1331,8 +1332,9 @@ void loop() {
   static uint32_t beatAt = 0;
   if (now - beatAt > 5000) {
     beatAt = now;
-    Serial.printf("[run %6lu ms] page %d heap %u KB psram %u KB wifi %d bms %d\n", (unsigned long)now, (int)ui::page,
-                  (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getFreePsram() / 1024), (int)net::online(), (int)S.bms.link);
+    Serial.printf("[run %6lu ms] page %d heap %u KB (min %u) psram %u KB wifi %d bms %d stack %u\n", (unsigned long)now, (int)ui::page,
+                  (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMinFreeHeap() / 1024), (unsigned)(ESP.getFreePsram() / 1024),
+                  (int)net::online(), (int)S.bms.link, bmslink::stackFree());
   }
   cloud::serialLoop();
   if (restartAt && (int32_t)(now - restartAt) > 0) ESP.restart();
