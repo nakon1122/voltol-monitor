@@ -771,10 +771,10 @@ static void bmsPayload(String &o, uint32_t now) {  // under LOCK
   o += ",\"bms_log\":{\"ago\":" + String((unsigned long)(now - bmT[first])) + ",\"o\":[";
   for (int i = 0; i < n; i++) { int k = (first + i) % BM_N; if (i) o += ","; o += String((unsigned long)(bmT[k] - bmT[first])); }
   static const char *const KEY[4] = {"v", "a", "soc", "d"};
-  static const int DEC[4] = {2, 1, 0, 0};
+  static const int NDEC[4] = {2, 1, 0, 0};
   for (int f = 0; f < 4; f++) {
     o += "],\""; o += KEY[f]; o += "\":[";
-    for (int i = 0; i < n; i++) { int k = (first + i) % BM_N; char t[16]; snprintf(t, sizeof t, "%s%.*f", i ? "," : "", DEC[f], bmV[k][f]); o += t; }
+    for (int i = 0; i < n; i++) { int k = (first + i) % BM_N; char t[16]; snprintf(t, sizeof t, "%s%.*f", i ? "," : "", NDEC[f], bmV[k][f]); o += t; }
   }
   o += "]}";
 }
