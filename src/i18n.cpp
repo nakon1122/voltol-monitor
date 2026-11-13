@@ -23,6 +23,7 @@ static const Pair TH[] = {
     {"IDLE", "ว่าง"}, {"INIT", "เริ่มระบบ"}, {"START", "สตาร์ท"}, {"RUN", "วิ่ง"}, {"STOP", "หยุด"},
     {"BRAKE", "เบรก"}, {"WAIT", "รอ"},
     // menu / header
+    {"Wires", "สายสัญญาณ"}, {"TX/RX swapped - fixed automatically (GPS 1/s)", "TX/RX สลับ - แก้ให้อัตโนมัติแล้ว (GPS 1 ครั้ง/วิ)"},
     // cloud setup page
     {"CLOUD SETUP", "เชื่อมต่อ Cloud"}, {"CLOUD OK", "Cloud ออนไลน์"}, {"ONLINE", "ออนไลน์"}, {"LINKED", "ผูกบัญชีแล้ว"}, {"NOT LINKED", "ยังไม่เชื่อม"},
     {"Join internet Wi-Fi", "ต่อ Wi-Fi อินเทอร์เน็ต"}, {"Connected: %s", "ต่อแล้ว: %s"}, {"Tap CHOOSE WI-FI below", "แตะ เลือก Wi-Fi ด้านล่าง"},

@@ -109,7 +109,8 @@ struct UiState {
   char bleSt[16] = "unsupported";  // blesetup::state()
   int bleLeft = 0;                 // seconds left in the pairing window
   bool blePhone = false;           // phone connected over Bluetooth
-  bool cloudCfg = false, cloudOk = false;  // module linked to an account / uploads accepted
+  bool cloudCfg = false, cloudOk = false;
+  bool uartSwap = false;           // VOTOL TX/RX wires swapped, fixed automatically  // module linked to an account / uploads accepted
   uint8_t updState = 0;        // ota::State
   int updProgress = 0;
   // info

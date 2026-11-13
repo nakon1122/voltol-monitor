@@ -12,6 +12,8 @@
 #include "config.h"
 #include "link.h"
 #include "gps.h"
+#include "uart_swap.h"
+#include <Preferences.h>
 
 namespace vlink {
 using namespace votol;
@@ -32,6 +34,19 @@ static float hzVal = 0;
 static int16_t lastRpm = 0;
 static volatile bool ackPN = false;
 static volatile int gpsCfgHz = 0;  // >0: send the u-blox setup on our TX line
+static UartSwap sw;                 // automatic TX/RX swap of the VOTOL wires
+static volatile bool swappedNow = false, gpsBlocked = false;
+static bool uartOpen = false;
+static void openUart(bool swap) {
+  int rx = swap ? VOTOL_TX_PIN : VOTOL_RX_PIN, tx = swap ? VOTOL_RX_PIN : VOTOL_TX_PIN;
+  if (uartOpen) U.end();
+  uartOpen = true;
+  pinMode(rx, INPUT);  // the old TX pin stops driving before it becomes our RX
+  U.setRxBufferSize(1024);  // must be set before begin()
+  U.begin(BAUDS[baudIx], SERIAL_8N1, rx, tx);
+  uart_set_rx_timeout(UART_NUM_2, 1);  // deliver received bytes 1 character after the line goes quiet
+  swappedNow = swap;
+}
 struct LiveItem { Live d; uint32_t ms; };
 static QueueHandle_t liveQ;
 static void liveTask(void *) {  // runs onLive (which waits for the shared lock) away from the UART loop
@@ -44,6 +59,9 @@ static void liveTask(void *) {  // runs onLive (which waits for the shared lock)
 // controller frames, so the GPS can be set up through the same pin.
 static void sendGpsConfig(int hz) {
   static uint8_t buf[640];
+  if (!sw.gpsSetupPossible()) return;     // wires confirmed swapped: our TX does not reach the GPS
+  bool back = swappedNow;
+  if (back) openUart(false);              // an unconfirmed guess: send it the way the guide wires it
   const uint32_t tryBauds[3] = {9600, 38400, 115200};
   for (uint32_t b : tryBauds) {
     U.updateBaudRate(b);
@@ -56,6 +74,7 @@ static void sendGpsConfig(int hz) {
   int n = gps::ubxSetupCmd(buf, hz);
   for (int i = 0; i < 2; i++) { U.write(buf, n); U.flush(); delay(80); }
   U.updateBaudRate(BAUDS[baudIx]);
+  if (back) openUart(true);
   while (U.available()) U.read();
 }
 
@@ -131,10 +150,15 @@ static void doWrite() {
 
 static void task(void *) {
   uint8_t f[FRAME_LEN];
-  U.setRxBufferSize(1024);  // must be set before begin()
-  U.begin(BAUDS[baudIx], SERIAL_8N1, VOTOL_RX_PIN, VOTOL_TX_PIN);
-  uart_set_rx_timeout(UART_NUM_2, 1);  // deliver received bytes 1 character after the line goes quiet
-  uint32_t silentSince = millis();
+  {
+    Preferences p;
+    p.begin("votol", true);
+    bool saved = p.getUChar("uswap", 0) == 1;
+    p.end();
+    sw.begin(saved, millis());
+  }
+  openUart(sw.swapped);
+  uint32_t silentSince = millis(), seenGood = fr.good;
   for (;;) {
     if (gpsCfgHz) { int hz = gpsCfgHz; gpsCfgHz = 0; sendGpsConfig(hz); }
     if (wantRead) {
@@ -161,6 +185,19 @@ static void task(void *) {
     buildShow(f, haveParams ? img.chkA() : 0, haveParams ? img.chkB() : 0, haveParams ? img.chk3() : 0);
     sendFrame(f);
     pump(150, K_LIVE);
+    {  // wrong way round? try the pins the other way
+      bool got = fr.good != seenGood;
+      seenGood = fr.good;
+      UartSwap::Act act = sw.update(millis(), got);
+      if (act == UartSwap::SWITCH) openUart(sw.swapped);
+      if (act == UartSwap::SAVE) {
+        Preferences p;
+        p.begin("votol", false);
+        if (p.getUChar("uswap", 0) != (sw.swapped ? 1 : 0)) p.putUChar("uswap", sw.swapped ? 1 : 0);
+        p.end();
+      }
+      gpsBlocked = !sw.gpsSetupPossible();
+    }
     if (millis() - hzAt >= 2000) {
       hzVal = hzCount * 1000.0f / (millis() - hzAt);
       hzCount = 0;
@@ -193,4 +230,6 @@ float hz() { return hzVal; }
 uint32_t goodFrames() { return fr.good; }
 uint32_t badFrames() { return fr.bad; }
 bool alive() { return millis() - lastLive < 1000; }
+bool swapped() { return swappedNow && sw.confirmed; }
+bool gpsSetupBlocked() { return gpsBlocked; }
 }  // namespace vlink

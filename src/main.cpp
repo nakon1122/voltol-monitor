@@ -12,6 +12,7 @@
 #include "display.h"
 #include "gps.h"
 #include "link.h"
+#include "gps_sched.h"
 #include "logger.h"
 #include "ota.h"
 #include "ride.h"
@@ -137,9 +138,8 @@ static void newTrip(bool fromBoot) {
 // any NMEA receiver works as a fallback.
 static gps::Nmea nmea;
 static gps::Ubx ubx;
-static uint32_t gpsLast = 0, gpsCount = 0, gpsHzAt = 0, gpsBaudAt = 0, gpsCfgAt = 0;
-static int gpsBaudIx = 0;
-static const uint32_t GPS_BAUDS[3] = {115200, 9600, 38400};
+static uint32_t gpsLast = 0, gpsCount = 0, gpsHzAt = 0;
+static GpsSched gpsSched;
 static double gpsOffset = 1e18;  // millis-clock seconds minus GPS seconds (smallest seen)
 static uint32_t lastItow = 0;
 static bool gpsUsable() { return S.gpsFix && millis() - gpsLast < 1500; }
@@ -287,18 +287,11 @@ static void gpsPoll() {
     S.gpsHz = gpsCount * 1000.0f / (now - gpsHzAt);
     gpsCount = 0; gpsHzAt = now;
     if (now - gpsLast > 3000) { S.gpsFix = false; S.dragWaitGps = drag.cfg.fitN > 2 && drag.state == ride::DragTimer::ARMED; }
-    // nothing heard: try the other baud rates, and re-send the u-blox setup
-    if (now - gpsLast > 4000 && now - gpsBaudAt > 4000) {
-      gpsBaudIx = (gpsBaudIx + 1) % 3;
-      Serial1.updateBaudRate(GPS_BAUDS[gpsBaudIx]);
-      gpsBaudAt = now;
-    }
-    if (now - gpsCfgAt > 15000 && (!S.gpsUbx || now - gpsLast > 4000 || S.gpsHz < (cfg.gpsRate ? 15 : 7))) {
-      gpsCfgAt = now;
-      vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
-      gpsBaudIx = 0;
-      Serial1.updateBaudRate(GPS_BAUDS[0]);
-    }
+    // nothing heard: try the other baud rates; slow or no u-blox output: re-send the setup
+    bool sendCfg;
+    if (gpsSched.tick(now, gpsLast, S.gpsUbx, S.gpsHz, cfg.gpsRate ? 15 : 7, vlink::gpsSetupBlocked(), sendCfg))
+      Serial1.updateBaudRate(GpsSched::BAUDS[gpsSched.baudIx]);
+    if (sendCfg) vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
   }
 }
 
@@ -1079,7 +1072,7 @@ void setup() {
     p.end();
   }
   Serial1.setRxBufferSize(2048);
-  Serial1.begin(GPS_BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  Serial1.begin(GpsSched::BAUDS[0], SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   web::begin(api, setClock);
   web::setLive([] { LOCK(); String o = liveJsonLocked(); UNLOCK(); return o; }, [] { return vlink::goodFrames(); });
 #ifdef VOTOL_HEADLESS
@@ -1094,7 +1087,7 @@ void setup() {
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
   vlink::requestGpsConfig(cfg.gpsRate ? 25 : 10);
-  gpsCfgAt = millis();
+  gpsSched.cfgAt = millis();
   delay(1200);
   // a new module waiting for its first Bluetooth setup: open the step-by-step setup page
   ui::go(strcmp(blesetup::state(), "boot-ready") ? PG_DASH : PG_PAIR);
@@ -1205,6 +1198,7 @@ void loop() {
   gpsPoll();
   // link status
   S.linked = vlink::alive();
+  S.uartSwap = vlink::swapped();
   if (!S.linked && !gpsUsable()) S.speedOk = false;
   S.hz = vlink::hz();
   S.baud = vlink::baud();

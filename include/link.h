@@ -25,4 +25,6 @@ float hz();
 uint32_t goodFrames();
 uint32_t badFrames();
 bool alive();  // live data within the last second
+bool swapped();          // the VOTOL TX/RX wires are the other way round (fixed automatically)
+bool gpsSetupBlocked();  // ... and therefore the GPS cannot be set up (factory output: NMEA, 1 per second)
 }  // namespace vlink

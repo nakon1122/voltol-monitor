@@ -20,7 +20,8 @@ jobs:
           set -o pipefail
           mkdir -p out
           (g++ -std=c++17 -Iinclude -o proto_test test/proto_test.cpp && ./proto_test && \
-           g++ -std=c++17 -Iinclude -o ride_test test/ride_test.cpp && ./ride_test) 2>&1 | tee out/TESTS.txt
+           g++ -std=c++17 -Iinclude -o ride_test test/ride_test.cpp && ./ride_test && \
+           g++ -std=c++17 -Iinclude -o swap_test test/swap_test.cpp && ./swap_test) 2>&1 | tee out/TESTS.txt
       - name: Render screen previews (real UI code)
         continue-on-error: true
         run: |

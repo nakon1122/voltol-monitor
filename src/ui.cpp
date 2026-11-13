@@ -1148,6 +1148,7 @@ static void infoPage(Gfx &g, const UiState &s) {
   infoLine(g, y, "Internet", t, s.netConnected ? GREEN : MUTED2);
   snprintf(t, sizeof t, T("%s · %u baud · %.1f Hz"), s.linked ? T("connected") : T("no data"), (unsigned)s.baud, s.hz);
   infoLine(g, y, "Controller", t, s.linked ? GREEN : RED);
+  if (s.uartSwap) infoLine(g, y, "Wires", "TX/RX swapped - fixed automatically (GPS 1/s)", YELLOW);
   snprintf(t, sizeof t, T("%u good · %u bad"), (unsigned)s.frames, (unsigned)s.errors);
   infoLine(g, y, "Frames", t);
   if (s.gpsSeen) snprintf(t, sizeof t, T("%s%s · %d sats · %.0f Hz · ±%.1f km/h"), s.gpsUbx ? "u-blox " : "NMEA ", s.gpsFix ? T("fix") : T("no fix"), s.gpsSats, s.gpsHz, s.gpsSAcc);

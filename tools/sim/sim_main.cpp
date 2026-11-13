@@ -196,6 +196,7 @@ int main(int argc, char **argv) {
   ui::page = PG_SETUP; shot("24_setup");
   ui::page = PG_INFO; shot("26_info_update");
   s.updState = 2; s.updProgress = 62; shot("27_info_downloading");
+  s.updState = 0; s.uartSwap = true; shot("27b_info_wires_swapped"); s.uartSwap = false;
   // ---- internet Wi-Fi picked on the screen
   {
     const WifiNet nets[6] = {{"Home-WiFi", -48, true, true}, {"VOTOL-Garage", -58, true, false}, {"TrueMove-5G-7A21", -66, true, false},
