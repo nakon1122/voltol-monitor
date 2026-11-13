@@ -6,5 +6,6 @@ namespace i18n {
 enum : uint8_t { LANG_TH = 0, LANG_EN = 1 };
 extern uint8_t lang;
 const char *tr(const char *en);
+const char *th(const char *en);  // Thai whatever the screen language (cloud page texts)
 }  // namespace i18n
 #define T(s) i18n::tr(s)

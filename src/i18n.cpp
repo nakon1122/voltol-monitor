@@ -227,11 +227,18 @@ static const Pair TH[] = {
     {"Capacity", "ความจุ"}, {"Cell OVP release", "คืนตัวแรงดันเกิน"}, {"Cell UVP release", "คืนตัวแรงดันต่ำ"},
     {"Pack OVP", "แพ็กแรงดันเกิน"}, {"Pack UVP", "แพ็กแรงดันต่ำ"}, {"Charge OC", "กระแสชาร์จเกิน"},
     {"Discharge OC", "กระแสจ่ายเกิน"}, {"Cloud changed %s: %s > %s", "Cloud แก้ %s: %s > %s"},
+    {"out of safe range", "เกินช่วงที่ปลอดภัย"}, {"settings not read yet", "ยังไม่ได้อ่านค่า"}, {"OVP must be above OVP recovery", "ต้องสูงกว่าคืนตัวแรงดันเกิน"}, {"UVP recovery must be above UVP", "คืนตัวต้องสูงกว่าแรงดันต่ำ"}, {"OVP recovery must be above UVP recovery", "คืนตัวแรงดันเกินต้องสูงกว่าคืนตัวแรงดันต่ำ"}, {"UVP must be above power off", "ต้องสูงกว่าแรงดันตัดไฟ"}, {"balance start above OVP", "เริ่มบาลานซ์ต้องต่ำกว่าแรงดันเกิน"}, {"BMS not connected", "ยังไม่ได้เชื่อม BMS"}, {"read the BMS settings first", "อ่านค่า BMS ก่อน"}, {"busy", "กำลังทำงานอยู่"}, {"nothing to write", "ไม่มีค่าที่ต้องเขียน"}, {"BMS kept the old value", "BMS ไม่รับค่าใหม่"}, {"not on this Daly", "Daly รุ่นนี้ไม่รองรับ"}, {"%d of %d values verified", "ตรวจผ่าน %d จาก %d ค่า"}, {"this board has no Bluetooth", "บอร์ดนี้ไม่มีบลูทูธ"}, {"Stop the bike first (0 km/h)", "จอดรถให้นิ่งก่อน (0 กม./ชม.)"}, {"Balance voltage", "แรงดันบาลานซ์"}, {"Nominal capacity", "ความจุ"}, {"Design capacity", "ความจุออกแบบ"}, {"Full capacity", "ความจุเต็ม"}, {"Pack OVP release", "คืนตัวแพ็กแรงดันเกิน"}, {"Pack UVP release", "คืนตัวแพ็กแรงดันต่ำ"}, {"Balance delta", "บาลานซ์เมื่อต่างกัน"}, {"Charge high temp", "ร้อนเกินขณะชาร์จ"}, {"Dsg high temp", "ร้อนเกินขณะจ่าย"}, {"Charge low temp", "เย็นเกินขณะชาร์จ"}, {"Dsg low temp", "เย็นเกินขณะจ่าย"},
     // faults
     {"Overcurrent", "กระแสเกิน"}, {"Overheating", "ร้อนเกิน"}, {"Hall fault", "ฮอลล์ผิดปกติ"}, {"Motor hall", "ฮอลล์มอเตอร์"},
     {"Brake", "เบรก"}, {"Out of control", "ควบคุมไม่ได้"}, {"Controller failure", "กล่องผิดปกติ"},
 };
 
+const char *th(const char *en) {
+  if (!en || !*en) return en;
+  for (const Pair &p : TH)
+    if (!strcmp(p.en, en)) return p.th;
+  return en;
+}
 const char *tr(const char *en) {
   if (lang != LANG_TH || !en || !*en) return en;
   for (const Pair &p : TH)

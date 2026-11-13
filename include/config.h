@@ -1,6 +1,6 @@
 // Board wiring for the ESP32-3248S035 ("CYD 3.5", ST7796 + XPT2046).
 #pragma once
-#define VOTOL_FW "1.8.7"
+#define VOTOL_FW "1.9.0"
 
 #if defined(VOTOL_P4C5)
 // ---- KSDIY ESP32-P4C5 4.3" MIPI board (ST7102 480x800 + ST7123 touch, C5 Wi-Fi, ML307C 4G) ----

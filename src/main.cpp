@@ -21,6 +21,7 @@
 #include "net.h"
 #include "cloud.h"
 #include "blesetup.h"
+#include "bmslink.h"
 
 static UiState S;
 static Settings cfg;
@@ -324,7 +325,8 @@ static void onLive(const votol::Live &d, uint32_t ms) {
   S.kmh = g ? S.gpsKmh : rpmKmh;
   S.speedOk = true;
   S.kw = d.volt * d.amp / 1000;
-  S.soc = ride::socFromVolt(d.volt, cfg.cells, cfg.cellEmptyMv / 1000.0f, cfg.cellFullMv / 1000.0f);
+  if (!(S.bms.link == bms::L_ONLINE && S.bms.have))  // the BMS knows the charge better than the voltage does
+    S.soc = ride::socFromVolt(d.volt, cfg.cells, cfg.cellEmptyMv / 1000.0f, cfg.cellFullMv / 1000.0f);
   S.trip.add(t, S.kmh, d.amp, d.volt);
   S.odoKm = odoBase + S.trip.distM / 1000;
   if (drag.cfg.fitN <= 2) drag.feed(t, rpmKmh, d.amp, d.volt);  // armed in RPM mode
@@ -709,6 +711,141 @@ static bool frAck() {
   UNLOCK();
   return more;
 }
+
+// ------------------------------------------------------------- smart BMS ----
+// Live values every 0.3 s go to the cloud in batches (normally every 3 s, 10 samples);
+// settings snapshots and write results go up as events (bms_params / bms_change).
+static const int BM_N = 200;                 // 60 s of samples if the internet drops out
+static uint32_t bmT[BM_N];
+static float bmV[BM_N][4];                   // pack V, current A, SOC %, cell difference mV
+static int bmHead = 0, bmCount = 0;
+static uint32_t bmSeq = 0, bmSentTo = 0, bmNext = 0, bmPostAt = 0;
+static void bmsSample(uint32_t now) {        // under LOCK
+  if (S.bms.link != bms::L_ONLINE || !S.bms.have || S.bms.age > 5) { bmNext = 0; return; }
+  if (bmNext && (int32_t)(now - bmNext) < 0) return;
+  bmNext = (bmNext && now - bmNext < 300) ? bmNext + 300 : now + 300;  // steady 0.3 s steps
+  const bms::Live &L = S.bms.live;
+  bmT[bmHead] = now;
+  bmV[bmHead][0] = L.volt; bmV[bmHead][1] = L.amp; bmV[bmHead][2] = L.soc; bmV[bmHead][3] = (L.cellMax() - L.cellMin()) * 1000;
+  bmHead = (bmHead + 1) % BM_N;
+  if (bmCount < BM_N) bmCount++;
+  bmSeq++;
+}
+static bool bmAck() {
+  LOCK();
+  uint32_t oldest = bmSeq - bmCount;
+  if (bmSentTo > oldest) {
+    uint32_t drop = bmSentTo - oldest;
+    bmCount = drop >= (uint32_t)bmCount ? 0 : bmCount - drop;
+  }
+  bool more = bmCount >= 30;
+  UNLOCK();
+  return more;
+}
+static void bmsPayload(String &o, uint32_t now) {  // under LOCK
+  const BmsUi &b = S.bms;
+  if ((b.link == bms::L_OFF && !b.mac[0]) || b.link == bms::L_NOBLE) return;
+  static const char *const ST[] = {"off", "scan", "connect", "online", "lost", "noble"};
+  o += ",\"bms\":{\"st\":\""; o += ST[b.link < 6 ? b.link : 0]; o += "\",\"br\":\""; o += bms::BRAND[b.brand < bms::BR_COUNT ? b.brand : 0];
+  o += "\",\"nm\":"; jstr(o, b.name);
+  o += ",\"rssi\":" + String(b.rssi);
+  if (b.have) {
+    const bms::Live &L = b.live;
+    char t[200];
+    snprintf(t, sizeof t, ",\"v\":%.2f,\"a\":%.1f,\"soc\":%.0f,\"rem\":%.1f,\"full\":%.1f,\"cyc\":%lu,\"t\":[%.0f,%.0f],\"mos\":%.0f,\"chg\":%s,\"dsg\":%s,\"bal\":%s,\"al\":%lu,\"balm\":%lu,\"age\":%.0f",
+             L.volt, L.amp, L.soc, L.remainAh, L.fullAh, (unsigned long)L.cycles, L.temp[0], L.temp[1], L.mos, L.chg ? "true" : "false",
+             L.dsg ? "true" : "false", L.bal ? "true" : "false", (unsigned long)L.alarms, (unsigned long)L.balMask, b.age);
+    o += t;
+    o += ",\"cells\":[";
+    for (int i = 0; i < L.nCells; i++) { if (i) o += ","; o += String((int)lroundf(L.cell[i] * 1000)); }
+    o += "]";
+  }
+  o += "}";
+  // log batch: every 3 s (or right away when samples piled up after a drop-out)
+  bool due = bmCount >= 10 || (bmCount && now - bmPostAt >= 3000);
+  if (!due) { bmSentTo = bmSeq - bmCount; return; }
+  bmPostAt = now;
+  int n = bmCount < 40 ? bmCount : 40;  // oldest first
+  int first = (bmHead - bmCount + BM_N) % BM_N;
+  bmSentTo = bmSeq - bmCount + n;
+  o += ",\"bms_log\":{\"ago\":" + String((unsigned long)(now - bmT[first])) + ",\"o\":[";
+  for (int i = 0; i < n; i++) { int k = (first + i) % BM_N; if (i) o += ","; o += String((unsigned long)(bmT[k] - bmT[first])); }
+  static const char *const KEY[4] = {"v", "a", "soc", "d"};
+  static const int DEC[4] = {2, 1, 0, 0};
+  for (int f = 0; f < 4; f++) {
+    o += "],\""; o += KEY[f]; o += "\":[";
+    for (int i = 0; i < n; i++) { int k = (first + i) % BM_N; char t[16]; snprintf(t, sizeof t, "%s%.*f", i ? "," : "", DEC[f], bmV[k][f]); o += t; }
+  }
+  o += "]}";
+}
+static String bmsParamsJson() {  // under LOCK
+  const BmsUi &b = S.bms;
+  int n = b.pHave ? bms::paramCount(b.brand) : 0;
+  String defs = "[", v = "[";
+  for (int i = 0; i < n; i++) {
+    bms::ParamDef d = bms::param(b.brand, i);
+    char t[160];
+    snprintf(t, sizeof t, "%s[%d,", i ? "," : "", i);
+    defs += t; jstr(defs, i18n::th(d.name)); defs += ","; jstr(defs, bms::isSwitch(d) ? "sw" : d.unit);
+    snprintf(t, sizeof t, ",%g,%g,%g,%d,%d,%d,%d]", d.min, d.max, d.step, d.dec, bms::isSwitch(d) ? 1 : 0, d.below, d.above);
+    defs += t;
+    snprintf(t, sizeof t, "%s%.*f", i ? "," : "", d.dec, b.pv[i]);
+    v += t;
+  }
+  J j;
+  j.b("have", b.pHave).t("when", b.pWhen).t("brand", bms::BRAND[b.brand < bms::BR_COUNT ? b.brand : 0]).b("busy", b.busy)
+   .t("msg", i18n::th(b.msg)).i("kind", b.msgKind).b("stopped", !S.speedOk || S.kmh < 1).raw("defs", defs + "]").raw("v", v + "]");
+  return j.obj();
+}
+static void bmsPushParams() { if (cloud::configured()) cloud::event("bms_params", bmsParamsJson()); }
+// write from the screen or the cloud: n changes (unified index, value)
+static const char *bmsWrite(const int *idx, const float *val, int n, const char *by) {
+  if (S.speedOk && S.kmh >= 1) return "Stop the bike first (0 km/h)";
+  const char *why = bmslink::write(idx, val, n, by);
+  if (!why) { strlcpy(S.bms.msg, "Writing...", sizeof S.bms.msg); S.bms.msgKind = 0; S.bms.busy = true; }
+  return why;
+}
+static void bmsLoop(uint32_t now) {  // under LOCK
+  if (bmslink::poll(S.bms)) {
+    if (S.bms.pHave) shortWhen(S.bms.pWhen, sizeof S.bms.pWhen);
+    bmsPushParams();
+  }
+  bmslink::WriteResult r;
+  if (bmslink::takeWrite(r)) {
+    memcpy(S.bms.pe, S.bms.pv, sizeof S.bms.pe);  // editor back to what the BMS holds now
+    if (ui::page == PG_BMS_CONFIRM) ui::go(PG_BMS_SET);
+    needFull = true;
+    String set = "[";
+    for (int k = 0; k < r.n; k++) {
+      bms::ParamDef d = bms::param(S.bms.brand, r.idx[k]);
+      char a[24], z[24];
+      bms::format(d, r.before[k], a, sizeof a); bms::format(d, r.after[k], z, sizeof z);
+      if (bms::isSwitch(d)) { strlcpy(a, i18n::th(a), sizeof a); strlcpy(z, i18n::th(z), sizeof z); }
+      set += k ? ",[" : "[";
+      jstr(set, i18n::th(d.name)); set += ","; jstr(set, bms::isSwitch(d) ? "sw" : d.unit); set += ","; jstr(set, a); set += ","; jstr(set, z);
+      set += "]";
+    }
+    J j;
+    j.t("by", r.by).b("ok", r.ok).t("msg", i18n::th(r.msg)).raw("set", set + "]");
+    if (cloud::configured()) cloud::event("bms_change", j.obj());
+    if (!strcmp(r.by, "cloud") && r.n) {  // tell the rider on the screen
+      bms::ParamDef d = bms::param(S.bms.brand, r.idx[0]);
+      char a[24], z[40];
+      bms::format(d, r.before[0], a, sizeof a); bms::format(d, r.after[0], z, sizeof z);
+      if (!bms::isSwitch(d)) { strlcat(z, " ", sizeof z); strlcat(z, d.unit, sizeof z); }
+      i18n::lang = cfg.lang;
+      snprintf(S.bms.cloudNote, sizeof S.bms.cloudNote, T("Cloud changed %s: %s > %s"), T(d.name), bms::isSwitch(d) ? T(a) : a, bms::isSwitch(d) ? T(z) : z);
+    }
+    bmsPushParams();
+  }
+  if (S.bms.link == bms::L_ONLINE && S.bms.have) S.soc = (int)lroundf(S.bms.live.soc);
+  bmsSample(now);
+#ifdef VOTOL_HEADLESS
+  // no screen to pick a BMS: look for one now and then; exactly one found is taken automatically
+  static uint32_t autoScanAt = 20000;
+  if (!S.bms.mac[0] && S.bms.link == bms::L_OFF && (int32_t)(now - autoScanAt) > 0) { autoScanAt = now + 300000; bmslink::scan(); }
+#endif
+}
 // Same fields as v1.6.x (the web dashboard reads them) + Wi-Fi list for remote control.
 static void cloudPayload(String &o, int &rpm, bool &moving) {
   LOCK();
@@ -774,6 +911,7 @@ static void cloudPayload(String &o, int &rpm, bool &moving) {
     o += String(",\"wifi_scan_busy\":") + (busy ? "true" : "false");
     if (!busy) o += ",\"wifi_scan\":" + net::scanJson();
   }
+  bmsPayload(o, millis());
   o += "}";
   UNLOCK();
 }
@@ -837,6 +975,25 @@ static String cloudCmd(const String &cmd, const String &args, bool &ok) {
       if (!n) { ok = false; out = "nothing to write"; }
       else { act.writeParams = true; doActions(act); out = "writing " + String(n) + " value(s)"; }
     }
+  }
+  else if (cmd == "bms_get") { bmsPushParams(); out = "sent"; }
+  else if (cmd == "bms_read") {
+    if (S.bms.link != bms::L_ONLINE) { ok = false; out = "BMS not connected"; }
+    else { bmslink::readSettings(); out = "reading"; }
+  } else if (cmd == "bms_write") {
+    // args {set: [[index, value], ...]} (index into the list of the bms_params snapshot)
+    JsonArray set = a["set"].as<JsonArray>();
+    int idx[16], n = 0;
+    float val[16];
+    if (!set.isNull())
+      for (JsonVariant v : set) {
+        if (n >= 16) break;
+        int i = v[0] | -1;
+        if (i < 0 || i >= bms::paramCount(S.bms.brand) || !v[1].is<float>()) continue;
+        idx[n] = i; val[n] = v[1].as<float>(); n++;
+      }
+    const char *why = n ? bmsWrite(idx, val, n, "cloud") : "nothing to write";
+    if (why) { ok = false; out = why; } else out = "writing " + String(n) + " value(s)";
   }
   else { ok = false; out = "unknown command"; }
   UNLOCK();
@@ -1083,7 +1240,8 @@ void setup() {
   ota::begin(VOTOL_BOARD, updateGuard);
   web::enable(cfg.wifi);
   cloud::begin(cloudPayload, cloudCmd);
-  cloud::setAck(frAck);
+  cloud::setAck([] { bool a = frAck(); bool b = bmAck(); return a || b; });
+  bmslink::begin();
   blesetup::begin(!cloud::configured(), onBleSetup);  // Bluetooth on all the time (setting) / 3-minute window for a new module
   S.busy = true;
   vlink::begin(onLive, onParams, onWrite);
@@ -1125,6 +1283,18 @@ static void doActions(UiActions &a) {
   }
   if (a.profChanged) saveProf();
   if (a.blePair) blesetup::startScreen();
+  if (a.bmsScan) bmslink::scan();
+  if (a.bmsConnect >= 0 && a.bmsConnect < S.bms.foundN) bmslink::connect(S.bms.found[a.bmsConnect]);
+  if (a.bmsForget) bmslink::forget();
+  if (a.bmsRead) { bmslink::readSettings(); S.bms.busy = true; S.bms.msg[0] = 0; }
+  if (a.bmsWrite) {
+    int idx[16], n = 0;
+    float val[16];
+    for (int i = 0; i < bms::paramCount(S.bms.brand) && n < 16; i++)
+      if (fabsf(S.bms.pe[i] - S.bms.pv[i]) > 1e-4f) { idx[n] = i; val[n] = S.bms.pe[i]; n++; }
+    const char *why = n ? bmsWrite(idx, val, n, "screen") : "nothing to write";
+    if (why) { strlcpy(S.bms.msg, why, sizeof S.bms.msg); S.bms.msgKind = 2; }
+  }
   if (a.wifiScan && !net::scanBusy()) { net::scanStart(); wifiScanAt = millis(); wifiListed = -1; }
   if (a.wifiJoin && a.wifiSsid[0]) { net::add(a.wifiSsid, a.wifiPass); memset(a.wifiPass, 0, sizeof a.wifiPass); wifiListed = -1; }
   if (a.wifiForget && a.wifiSsid[0]) { net::remove(a.wifiSsid); wifiListed = -1; }
@@ -1138,6 +1308,7 @@ void loop() {
   blesetup::loop();
   splitSample();
   frameSample(now);
+  bmsLoop(now);
   UNLOCK();
   cloud::serialLoop();
   if (restartAt && (int32_t)(now - restartAt) > 0) ESP.restart();
@@ -1159,6 +1330,7 @@ void loop() {
     S.cloudCfg = cloud::configured();
     S.cloudOk = cloud::online();
     S.rolledBack = o.rolledBack;
+    bmslink::pause(o.state == ota::S_CHECKING || o.state == ota::S_DOWNLOADING);  // the download needs the memory
   }
   if (ui::page == PG_WIFI) {  // scan results for the on-screen Wi-Fi picker
     bool busy = net::scanBusy();

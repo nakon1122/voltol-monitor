@@ -25,7 +25,7 @@ enum : uint32_t {
 static const int ALARM_N = 12;
 extern const char *const ALARM[ALARM_N];
 
-struct Found { char name[24]; char mac[18]; int8_t rssi; uint8_t brand; };
+struct Found { char name[24]; char mac[18]; int8_t rssi; uint8_t brand; uint8_t type = 0; };  // type = BLE address type
 
 struct Live {
   float volt = 0, amp = 0, soc = 0, remainAh = 0, fullAh = 0, mos = 0;
@@ -40,7 +40,12 @@ struct Live {
 };
 
 // One writable setting: protection values or an on/off switch (unit "sw").
-struct ParamDef { const char *name, *unit; float min, max, step; uint8_t dec; };
+struct ParamDef {
+  const char *name, *unit;
+  float min, max, step;
+  uint8_t dec;
+  int8_t below = -1, above = -1;  // must stay below / above this other setting (unified index)
+};
 static const int MAX_PARAMS = 64;
 int paramCount(uint8_t brand);
 ParamDef param(uint8_t brand, int i);
@@ -48,6 +53,8 @@ bool isSwitch(const ParamDef &d);
 // nullptr when value v may be written to setting i (cur = all current values)
 const char *check(uint8_t brand, const float *cur, int i, float v);
 void format(const ParamDef &d, float v, char *out, int n);
+// Alarm bits worked out from the live values (and the protection settings when read).
+uint32_t alarms(const Live &L, uint8_t brand, const float *pv, uint64_t pvHave);
 }  // namespace bms
 
 // Everything the screens need about the BMS.

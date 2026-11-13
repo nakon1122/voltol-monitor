@@ -16,8 +16,9 @@ static volatile int httpCode = 0;
 static volatile uint32_t okAt = 0;
 static PayloadFn payloadFn = nullptr;
 static AckFn ackFn = nullptr;
-static String evCode, evBody;  // one pending event (under mtx)
-static uint8_t evTries = 0;
+static const int EV_N = 4;       // pending events (under mtx); a newer one of the same kind replaces an unsent one
+static String evCode[EV_N], evBody[EV_N];
+static uint8_t evTries[EV_N];
 static CmdFn cmdFn = nullptr;
 static SemaphoreHandle_t mtx;
 
@@ -129,15 +130,16 @@ static void task(void *) {
       uint8_t os = ota::status().state;
       if (os == ota::S_CHECKING || os == ota::S_DOWNLOADING) { if (tls) { http.end(); delete tls; tls = nullptr; } continue; }
     }
-    {  // pending event (parameter snapshot): goes out before the next telemetry
+    {  // pending events (parameter snapshots, BMS changes): go out before the next telemetry
       String code, detail;
+      int k = -1;
       xSemaphoreTake(mtx, portMAX_DELAY);
-      if (evCode.length()) { code = evCode; detail = evBody; }
+      for (int i = 0; i < EV_N && k < 0; i++) if (evCode[i].length()) { k = i; code = evCode[i]; detail = evBody[i]; }
       xSemaphoreGive(mtx);
-      if (code.length()) {
+      if (k >= 0) {
         int c = post("ingest", "{\"type\":\"event\",\"code\":\"" + code + "\",\"detail\":" + detail + "}", nullptr);
         xSemaphoreTake(mtx, portMAX_DELAY);
-        if (evCode == code && evBody == detail && (c == 200 || c == 201 || ++evTries >= 3)) { evCode = ""; evBody = ""; evTries = 0; }
+        if (evCode[k] == code && evBody[k] == detail && (c == 200 || c == 201 || ++evTries[k] >= 3)) { evCode[k] = ""; evBody[k] = ""; evTries[k] = 0; }
         xSemaphoreGive(mtx);
       }
     }
@@ -164,7 +166,11 @@ void setAck(AckFn a) { ackFn = a; }
 void event(const char *code, const String &detailJson) {
   if (!mtx) return;
   xSemaphoreTake(mtx, portMAX_DELAY);
-  evCode = code; evBody = detailJson; evTries = 0;
+  int k = -1;
+  for (int i = 0; i < EV_N && k < 0; i++) if (evCode[i] == code) k = i;     // same kind: replace
+  for (int i = 0; i < EV_N && k < 0; i++) if (!evCode[i].length()) k = i;  // free slot
+  if (k < 0) k = EV_N - 1;
+  evCode[k] = code; evBody[k] = detailJson; evTries[k] = 0;
   xSemaphoreGive(mtx);
 }
 void begin(PayloadFn p, CmdFn c) {

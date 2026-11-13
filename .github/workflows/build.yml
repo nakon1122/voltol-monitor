@@ -1,7 +1,7 @@
 name: Build firmware
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, bms]
   workflow_dispatch:
 permissions:
   contents: write
@@ -21,7 +21,8 @@ jobs:
           mkdir -p out
           (g++ -std=c++17 -Iinclude -o proto_test test/proto_test.cpp && ./proto_test && \
            g++ -std=c++17 -Iinclude -o ride_test test/ride_test.cpp && ./ride_test && \
-           g++ -std=c++17 -Iinclude -o swap_test test/swap_test.cpp && ./swap_test) 2>&1 | tee out/TESTS.txt
+           g++ -std=c++17 -Iinclude -o swap_test test/swap_test.cpp && ./swap_test && \
+           g++ -std=c++17 -Iinclude -o bms_test test/bms_test.cpp src/bms_defs.cpp && ./bms_test) 2>&1 | tee out/TESTS.txt
       - name: Render screen previews (real UI code)
         continue-on-error: true
         run: |
@@ -71,6 +72,7 @@ jobs:
           git config user.name "votol-ci"
           git config user.email "votol-ci@users.noreply.github.com"
           BR=firmware-build; [ "${GITHUB_REF_NAME}" = main ] || BR=firmware-dev   # dev builds never reach boards' OTA
+          [ "${GITHUB_REF_NAME}" = bms ] && BR=firmware-bms
           git checkout --orphan $BR
           git read-tree --empty
           mkdir -p firmware/screens

@@ -52,13 +52,28 @@ ParamDef param(uint8_t b, int i) {
   int ns = switches(b);
   if (i < ns) return i == 0 ? SW_CHG : i == 1 ? SW_DSG : SW_BAL;
   i -= ns;
+  if (i < 0) return {"?", "", 0, 0, 1, 0};
   if (b == BR_JK) {
-    const bmsw::JkParam &p = bmsw::JK_PARAMS[i];
-    return {p.name, p.unit, p.min, p.max, p.step, p.decimals};
+    using namespace bmsw;
+    const JkParam &p = JK_PARAMS[i];
+    ParamDef d{p.name, p.unit, p.min, p.max, p.step, p.decimals};
+    // OVP > OVP recovery > UVP recovery > UVP > power off
+    auto at = [&](int k) { return (int8_t)(ns + k); };
+    if (i == P_OVP) d.above = at(P_OVPR);
+    if (i == P_OVPR) { d.below = at(P_OVP); d.above = at(P_UVPR); }
+    if (i == P_UVPR) { d.below = at(P_OVPR); d.above = at(P_UVP); }
+    if (i == P_UVP) { d.below = at(P_UVPR); d.above = at(P_POWER_OFF); }
+    if (i == P_POWER_OFF) d.below = at(P_UVP);
+    return d;
   }
   int n;
   const bset::Def *t = table(b, n);
-  if (t && i < n) return {t[i].name, t[i].unit, t[i].min, t[i].max, t[i].step, t[i].dec};
+  if (t && i < n) {
+    ParamDef d{t[i].name, t[i].unit, t[i].min, t[i].max, t[i].step, t[i].dec};
+    if (t[i].below >= 0) d.below = (int8_t)(ns + t[i].below);
+    if (t[i].above >= 0) d.above = (int8_t)(ns + t[i].above);
+    return d;
+  }
   return {"?", "", 0, 0, 1, 0};
 }
 bool isSwitch(const ParamDef &d) { return !strcmp(d.unit, "sw"); }
@@ -70,17 +85,11 @@ const char *check(uint8_t b, const float *cur, int i, float v) {
   if (v < d.min - d.step / 2 || v > d.max + d.step / 2) return "outside the safe range";
   int ns = switches(b);
   if (i < ns) return nullptr;
-  if (b == BR_JK) {  // OVP > OVP recovery, UVP < UVP recovery, power off < UVP
-    const float *c = cur + ns;
-    int k = i - ns;
-    using namespace bmsw;
-    if (k == P_OVP && v <= c[P_OVPR]) return "must be above its release value";
-    if (k == P_OVPR && v >= c[P_OVP]) return "must be below its protection value";
-    if (k == P_UVP && v >= c[P_UVPR]) return "must be below its release value";
-    if (k == P_UVPR && v <= c[P_UVP]) return "must be above its protection value";
-    if (k == P_UVP && v <= c[P_POWER_OFF]) return "must be above power off";
-    if (k == P_POWER_OFF && v >= c[P_UVP]) return "must be below cell UVP";
-    return nullptr;
+  if (b == BR_JK) {  // BattLab rules: OVP > OVP recovery > UVP recovery > UVP > power off
+    bmsw::JkSettings js;
+    for (int k = 0; k < bmsw::JK_PARAM_COUNT; k++) js.v[k] = cur[ns + k];
+    js.valid = true;
+    return bmsw::checkJkValue(js, i - ns, v);
   }
   uint8_t fam = b == BR_ANT ? 2 : 3;
   return bset::check(fam, cur + ns, ~0ull, i - ns, v);
@@ -89,6 +98,28 @@ const char *check(uint8_t b, const float *cur, int i, float v) {
 void format(const ParamDef &d, float v, char *out, int n) {
   if (isSwitch(d)) snprintf(out, n, "%s", v > 0.5f ? "ON" : "OFF");
   else snprintf(out, n, "%.*f", d.dec, v);
+}
+uint32_t alarms(const Live &L, uint8_t b, const float *pv, uint64_t have) {
+  if (!L.nCells) return 0;
+  uint32_t a = 0;
+  float mn = L.cellMin(), mx = L.cellMax();
+  auto P = [&](const char *name, float &v) {  // protection value by name, when read
+    int n = paramCount(b);
+    for (int i = 0; i < n; i++)
+      if ((have >> i & 1) && !strcmp(param(b, i).name, name)) { v = pv[i]; return true; }
+    return false;
+  };
+  float ov, uv;
+  if (P("Cell OVP", ov) && mx >= ov - 0.005f) a |= A_CELL_OV;
+  if (P("Cell UVP", uv) && mn > 0 && mn <= uv + 0.005f) a |= A_CELL_UV;
+  if (mx - mn >= 0.10f) a |= A_CELL_DIFF;
+  bool chg = L.amp > 0.3f;
+  for (int i = 0; i < L.nTemp; i++) {
+    if (L.temp[i] >= 60) a |= chg ? A_CHG_OT : A_DSG_OT;
+    if (L.temp[i] <= 0 && chg) a |= A_LOW_T;
+  }
+  if (L.mos >= 80) a |= A_MOS_OT;
+  return a;
 }
 }  // namespace bms
 

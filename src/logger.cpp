@@ -183,7 +183,7 @@ void traceSave(uint32_t runId) {
   // keep the newest traces only: internal flash 4 runs, microSD / big flash 30 runs
   int keep = onSd ? 30 :
 #if !defined(VOTOL_HEADLESS) && !defined(VOTOL_S340) && !defined(VOTOL_P4C5)
-      4;
+      1;  // CYD: 64 KB of internal flash since 1.9.0 (microSD keeps 30)
 #else
       30;
 #endif

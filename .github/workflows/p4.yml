@@ -1,7 +1,7 @@
 name: Build P4C5
 on:
   push:
-    branches: [p4c5]
+    branches: [p4c5, bms]
   workflow_dispatch:
 permissions:
   contents: write
@@ -48,11 +48,12 @@ jobs:
         run: |
           git config user.name "votol-ci"
           git config user.email "votol-ci@users.noreply.github.com"
-          git checkout --orphan firmware-p4
+          BR=firmware-p4; [ "${GITHUB_REF_NAME}" = bms ] && BR=firmware-bms-p4
+          git checkout --orphan $BR
           git read-tree --empty
           mkdir -p firmware && cp out/* firmware/ 2>/dev/null || true
           tail -c 60000 out/build_p4.log > firmware/build_tail.log 2>/dev/null || true
           echo "${{ job.status }} ${GITHUB_SHA::7}" > firmware/STATUS.txt
           git add -f firmware/
           git commit -qm "p4c5 firmware for ${GITHUB_SHA::7} (${{ job.status }})"
-          git push -f origin firmware-p4
+          git push -f origin $BR

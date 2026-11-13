@@ -9,6 +9,7 @@
 #include <esp_bt.h>
 #include "net.h"
 #include "cloud.h"
+#include "bmslink.h"
 
 namespace blesetup {
 static const char *SVC = "648b7040-33c9-4a41-a133-83c009df0001";
@@ -144,26 +145,31 @@ static void setPowerMax() {
   for (int h = 0; h < 3; h++) esp_ble_tx_power_set((esp_ble_power_type_t)(ESP_BLE_PWR_TYPE_CONN_HDL0 + h), lvl);
 }
 
+static bool svcMade = false;  // GATT service exists (kept while the BMS link uses the radio)
 static void start() {
   if (on) return;
   net::btCoex(true);  // modem sleep on first, or the radio driver aborts
-  NimBLEDevice::init("VOTOL Setup");
+  if (!NimBLEDevice::getInitialized()) NimBLEDevice::init("VOTOL Setup");
   setPowerMax();
   NimBLEServer *srv = NimBLEDevice::createServer();
+  if (!svcMade) {
+    srv->advertiseOnDisconnect(true);
+    NimBLEService *svc = srv->createService(SVC);
+    NimBLECharacteristic *w = svc->createCharacteristic(CH_WRITE, NIMBLE_PROPERTY::WRITE);
+    w->setCallbacks(&writeCb);
+    cStatus = svc->createCharacteristic(CH_STATUS, NIMBLE_PROPERTY::READ);
+    cPub = svc->createCharacteristic(CH_PUB, NIMBLE_PROPERTY::READ);
+    cScan = svc->createCharacteristic(CH_SCAN, NIMBLE_PROPERTY::READ);
+    uint8_t zero = 0;
+    cScan->setValue(&zero, 1);
+    svc->start();
+    NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
+    adv->addServiceUUID(SVC);
+    adv->setScanResponse(true);
+    svcMade = true;
+  }
   srv->advertiseOnDisconnect(true);
-  NimBLEService *svc = srv->createService(SVC);
-  NimBLECharacteristic *w = svc->createCharacteristic(CH_WRITE, NIMBLE_PROPERTY::WRITE);
-  w->setCallbacks(&writeCb);
-  cStatus = svc->createCharacteristic(CH_STATUS, NIMBLE_PROPERTY::READ);
-  cPub = svc->createCharacteristic(CH_PUB, NIMBLE_PROPERTY::READ);
-  cScan = svc->createCharacteristic(CH_SCAN, NIMBLE_PROPERTY::READ);
-  uint8_t zero = 0;
-  cScan->setValue(&zero, 1);
-  svc->start();
-  NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
-  adv->addServiceUUID(SVC);
-  adv->setScanResponse(true);
-  adv->start();
+  NimBLEDevice::getAdvertising()->start();
   on = true;
   if (haveKey) cPub->setValue(pubRaw, 65);
   setState(st);
@@ -173,9 +179,19 @@ static void freeKey() {
 }
 static void stop() {
   if (!on) return;
+  on = false;
+  if (bmslink::busy()) {  // the BMS link shares the radio: only stop the setup service
+    NimBLEServer *srv = NimBLEDevice::getServer();
+    if (srv) {
+      srv->advertiseOnDisconnect(false);
+      for (uint16_t id : srv->getPeerDevices()) srv->disconnect(id);
+    }
+    NimBLEDevice::getAdvertising()->stop();
+    return;
+  }
   NimBLEDevice::deinit(true);
   cStatus = cPub = cScan = nullptr;
-  on = false;
+  svcMade = false;
   net::btCoex(false);
 }
 static bool makeKey() {
