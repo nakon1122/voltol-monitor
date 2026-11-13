@@ -1,0 +1,1 @@
+Put the .bin files here (VOTOL_CYD35_INSTALL.bin, VOTOL_CYD35_APP_UPDATE.bin, BOOT_APP0.bin).
