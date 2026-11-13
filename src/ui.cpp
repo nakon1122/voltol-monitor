@@ -1183,6 +1183,10 @@ static void bootPage(Gfx &g, const UiState &s) {
   g.text(240, 224, "MONITOR", F13B, MUTED2, AL_C);
   g.text(240, 268, "Connecting to VOTOL controller...", F13, SUB, AL_C);
   g.text(240, 300, s.fw, F10, MUTED, AL_C);
+  if (s.bootNote[0]) {  // the previous start stopped half-way: say where (photo for the developer)
+    g.fillRoundRect(20, 236, 440, 22, 6, 0x2A2008);
+    g.textMid(240, 247, s.bootNote, F11, YELLOW, AL_C);
+  }
 }
 
 static void strlcpy_(char *d, const char *s, size_t n) { snprintf(d, n, "%s", s ? s : ""); }

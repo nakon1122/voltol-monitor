@@ -1203,19 +1203,39 @@ static void migrateOldName() {
   p.end();
 }
 
-// start-up trace on the USB serial port (tools/serial_log.py records it)
+// start-up trace on the USB serial port (tools/serial_log.py records it), and the last
+// step kept in memory that survives a reset: the next start shows where it stopped.
+RTC_NOINIT_ATTR static uint32_t rtcMagic;
+RTC_NOINIT_ATTR static char rtcStage[28];
+static const uint32_t RTC_MAGIC = 0x564F5431;
+static void stage(const char *s) { strlcpy(rtcStage, s, sizeof rtcStage); rtcMagic = RTC_MAGIC; }
 static void bootLog(const char *step) {
+  stage(step);
   Serial.printf("[boot %6lu ms] %-18s heap %u KB, psram %u KB\n", (unsigned long)millis(), step,
                 (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getFreePsram() / 1024));
 }
 void setup() {
+  char prevStage[28];  // where the previous start got to (before this start overwrites it)
+  bool prevOk = rtcMagic == RTC_MAGIC;
+  strlcpy(prevStage, prevOk ? rtcStage : "", sizeof prevStage);
   migrateOldName();  // before anything reads its settings
   ota::bootCheck();  // boot-loop protection after an update
   Serial.begin(115200);
   bootLog("start " VOTOL_FW);
-  Serial.printf("[boot] last reset reason %d (4 panic, 5 int wdt, 6 task wdt, 7 wdt, 9 brownout)\n", (int)esp_reset_reason());
   lock = xSemaphoreCreateMutex();
   loadSettings();
+  i18n::lang = cfg.lang;
+  {
+    int why = (int)esp_reset_reason();
+    Serial.printf("[boot] last reset reason %d (4 panic, 5 int wdt, 6 task wdt, 7 wdt, 9 brownout)\n", why);
+    static const char *const R[] = {"?", "power", "ext", "sw", "crash", "int wdt", "task wdt", "wdt", "sleep", "brownout", "sdio"};
+    const char *rs = why >= 0 && why <= 10 ? R[why] : "?";
+    if (prevOk && strcmp(prevStage, "running") && strcmp(prevStage, "start " VOTOL_FW))  // stopped during start-up
+      snprintf(S.bootNote, sizeof S.bootNote, T("Last start stopped at: %s (reset: %s)"), prevStage, rs);
+    else if (prevOk && (why == 4 || why == 5 || why == 6 || why == 7 || why == 9))
+      snprintf(S.bootNote, sizeof S.bootNote, T("Last run stopped: %s (%s)"), rs, prevStage);
+    if (S.bootNote[0]) Serial.printf("[boot] %s\n", S.bootNote);
+  }
   displayBegin();
   bootLog("display");
   displayBacklight(cfg.backlight);
@@ -1226,6 +1246,7 @@ void setup() {
   displayCalibrate(false);
   displayFlush(true);
   bootLog("boot screen shown");
+  if (S.bootNote[0]) delay(5000);  // time to read / photograph it
   S.sd = logger::begin();
   bootLog("storage");
   newTrip(true);
@@ -1462,10 +1483,14 @@ void loop() {
   // draw
   if (needFull) {
     needFull = false;
+    static bool firstDraw = true;
+    if (firstDraw) stage("first screen draw");
     LOCK();
     ui::draw(displayGfx(), S, cfg);
     UNLOCK();
+    if (firstDraw) stage("first screen flush");
     displayFlush(true);
+    if (firstDraw) { stage("running"); firstDraw = false; Serial.println("[boot] first screen shown"); }
     lastUpd = now;
   } else if (now - lastUpd >= 100 || (now - lastUpd >= 40 && vlink::goodFrames() != lastDrawFrames)) {
     // redraw as soon as a new controller frame arrived (up to 25 Hz), else 10 Hz

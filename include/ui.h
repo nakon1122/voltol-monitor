@@ -114,6 +114,7 @@ struct UiState {
   bool uartSwap = false;           // VOTOL TX/RX wires swapped, fixed automatically
   // smart BMS over Bluetooth
   BmsUi bms;
+  char bootNote[96] = "";          // why the last start did not finish (shown on the boot screen)
   uint8_t updState = 0;        // ota::State
   int updProgress = 0;
   // info
