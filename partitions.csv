@@ -1,8 +1,6 @@
 # Name,   Type, SubType, Offset,   Size
-# v1.9.0: Bluetooth (smart BMS) -> bigger app slots, smaller log area (a microSD card takes the logs).
-#         One USB install needed when coming from an older layout.
+# CYD 3.5" since v1.9.0: Bluetooth (smart BMS) needs more room than two update
+# slots leave on 4 MB, so one big app and USB updates only (votol.battlab.net).
 nvs,      data, nvs,     0x9000,   0x5000
-otadata,  data, ota,     0xe000,   0x2000
-app0,     app,  ota_0,   0x10000,  0x1F0000
-app1,     app,  ota_1,   0x200000, 0x1F0000
-spiffs,   data, spiffs,  0x3F0000, 0x10000
+factory,  app,  factory, 0x10000,  0x3A0000
+spiffs,   data, spiffs,  0x3B0000, 0x50000

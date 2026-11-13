@@ -139,6 +139,11 @@ static void doCheck() {
   say(st.available ? "Version %s available" : "Up to date (%s)", st.latest);
 }
 static void doInstall() {
+#ifdef VOTOL_NO_OTA  // CYD since 1.9.0: one app slot (Bluetooth BMS), install over USB
+  st.state = S_ERROR;
+  say("Update with USB: votol.battlab.net");
+  return;
+#endif
   if (!st.available) doCheck();
   if (!st.available) return;
   const char *why = guard ? guard() : nullptr;
@@ -222,5 +227,10 @@ void loop() {
 void check() { request = 1; }
 void install() { request = 2; }
 const Status &status() { return st; }
-const char *uploadBlocked() { return guard ? guard() : nullptr; }
+const char *uploadBlocked() {
+#ifdef VOTOL_NO_OTA
+  return "Update with USB: votol.battlab.net";
+#endif
+  return guard ? guard() : nullptr;
+}
 }  // namespace ota
