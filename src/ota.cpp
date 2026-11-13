@@ -96,7 +96,11 @@ static String field(const String &js, int from, const char *key) {
 }
 // Minimal HTTPS GET; leaves the client positioned at the body. Returns content length.
 static long get(WiFiClientSecure &c, const String &path) {
-  c.setCACertBundle(CLOUD_CA_BUNDLE);
+  c.setCACertBundle(CLOUD_CA_BUNDLE
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+                    , sizeof(CLOUD_CA_BUNDLE)
+#endif
+  );
   c.setTimeout(15);
   if (!c.connect(HOST, 443)) return -1;
   c.printf("GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: votol-monitor\r\nConnection: close\r\n\r\n", path.c_str(), HOST);

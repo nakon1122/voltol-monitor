@@ -62,7 +62,11 @@ static HTTPClient http;
 static int post(const char *action, const String &body, String *reply) {
   if (!tls) {
     tls = new WiFiClientSecure();
-    if (clockOk()) tls->setCACertBundle(CLOUD_CA_BUNDLE);
+    if (clockOk()) tls->setCACertBundle(CLOUD_CA_BUNDLE
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+                                           , sizeof(CLOUD_CA_BUNDLE)
+#endif
+    );
     else tls->setInsecure();  // only until the clock is set (first seconds after boot)
     tls->setTimeout(6);
   }
