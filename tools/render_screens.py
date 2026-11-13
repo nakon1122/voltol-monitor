@@ -114,7 +114,7 @@ def render(flags=()):
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / 'sim'
         subprocess.run(['g++', '-std=c++17', '-O1', *flags, '-I', str(ROOT / 'include'), '-o', str(exe),
-                        str(ROOT / 'tools/sim/sim_main.cpp'), str(ROOT / 'src/ui.cpp'), str(ROOT / 'src/fonts_vlw.cpp'), str(ROOT / 'src/i18n.cpp')], check=True)
+                        str(ROOT / 'tools/sim/sim_main.cpp'), str(ROOT / 'src/ui.cpp'), str(ROOT / 'src/fonts_vlw.cpp'), str(ROOT / 'src/i18n.cpp'), str(ROOT / 'src/bms_defs.cpp')], check=True)
         lines = subprocess.run([str(exe)], check=True, capture_output=True, text=True).stdout.splitlines()
         lines += subprocess.run([str(exe), 'en'], check=True, capture_output=True, text=True).stdout.splitlines()
     return replay(lines, load_fonts())

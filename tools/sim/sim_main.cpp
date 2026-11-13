@@ -228,5 +228,57 @@ int main(int argc, char **argv) {
     ui::page = PG_DASH; ui::menuOpen = true; s.cloudCfg = false; s.updAvailable = true; shot("42_menu_alerts"); ui::menuOpen = false; s.updAvailable = false;
     s.cloudCfg = true;
   }
+  {  // ---- smart BMS over Bluetooth
+    live(0); s.cloudCfg = true; s.cloudOk = true;
+    BmsUi &b = s.bms;
+    ui::tick(900);
+    auto fill = [&](int n, float base) {
+      bms::Live &L = b.live;
+      L = bms::Live();
+      L.nCells = n;
+      static const int16_t d[32] = {4, 9, -3, 6, 2, -11, 7, 0, 5, 3, -2, 8, 1, 7, 2, -4, 6, 3, -1, 5, 2, 4, -6, 3, 1, 0, 2, 5, -2, 3, 4, 1};
+      for (int i = 0; i < n; i++) L.cell[i] = base + d[i] * 0.001f;
+      float sum = 0; for (int i = 0; i < n; i++) sum += L.cell[i];
+      L.volt = sum; L.amp = -48.6f; L.soc = 78; L.fullAh = 40; L.remainAh = 31.2f; L.cycles = 41;
+      L.nTemp = 2; L.temp[0] = 33; L.temp[1] = 34; L.mos = 38; L.chg = L.dsg = L.bal = true;
+    };
+    ui::page = PG_BMS; b.link = bms::L_OFF; b.have = false; shot("50_bms_none");
+    static const bms::Found F[4] = {{"JK_B2A8S20P", "C8:47:8C:1A:22:F0", -58, bms::BR_JK}, {"ANT-BLE20PHUB", "AA:C2:37:05:9B:11", -71, bms::BR_ANT},
+                                    {"xiaoxiang BMS", "A4:C1:38:6F:41:02", -83, bms::BR_JBD}, {"DL-40D63C2104", "40:D6:3C:21:04:7E", -89, bms::BR_DALY}};
+    b.link = bms::L_SCAN; b.foundN = 0; ui::page = PG_BMS_FIND; shot("51_bms_find_scanning_empty");
+    for (int i = 0; i < 4; i++) b.found[i] = F[i];
+    b.foundN = 4; shot("52_bms_find_scanning");
+    b.link = bms::L_OFF; b.sel = 0; shot("53_bms_find_pick");
+    b.link = bms::L_CONNECT; strcpy(b.name, "JK_B2A8S20P"); shot("54_bms_find_connecting");
+    strcpy(b.mac, F[0].mac); b.brand = bms::BR_JK; b.rssi = -58;
+    b.link = bms::L_ONLINE; fill(20, 3.92f); b.have = true; shot("55_bms_find_connected");
+    ui::page = PG_BMS; shot("56_bms_overview");
+    fill(20, 4.05f); b.live.amp = 12.4f; b.live.soc = 93; b.live.remainAh = 37.2f; b.live.balMask = (1u << 1) | (1u << 6) | (1u << 11);
+    shot("57_bms_charging");
+    fill(20, 3.92f); b.live.cell[13] = 4.231f; b.live.volt += 0.3f; b.live.alarms = bms::A_CELL_OV | bms::A_MOS_OT; b.live.mos = 82; b.live.chg = false;
+    shot("58_bms_alarm");
+    fill(20, 3.92f); b.link = bms::L_LOST; b.age = 14; shot("59_bms_lost");
+    b.link = bms::L_ONLINE; b.age = 0;
+    ui::page = PG_BMS_CELLS; shot("60_bms_cells_20s");
+    fill(24, 3.31f); b.live.balMask = 1u << 5; shot("61_bms_cells_24s_lfp");
+    fill(20, 3.92f);
+    ui::page = PG_BMS_SET; b.pHave = false; shot("62_bms_settings_unread");
+    const float v[18] = {1, 1, 1, 4.20f, 4.10f, 3.00f, 3.10f, 2.90f, 3.80f, 0.010f, 2.0f, 40, 150, 55, 65, 0, 80, 40};
+    for (int i = 0; i < 18; i++) b.pv[i] = b.pe[i] = v[i];
+    b.pHave = true; strcpy(b.pWhen, "18:31"); shot("63_bms_settings");
+    b.pe[3] = 4.15f; ui::touch(100, 40 + 3 * 34 + 10, s, cfg, *new UiActions()); shot("64_bms_settings_changed");
+    b.pe[4] = 4.18f; ui::touch(100, 40 + 4 * 34 + 10, s, cfg, *new UiActions()); shot("65_bms_settings_invalid");
+    b.pe[4] = 4.05f; i18n::lang = cfg.lang; snprintf(b.cloudNote, sizeof b.cloudNote, i18n::tr("Cloud changed %s: %s > %s"), i18n::tr("Max discharge I"), "150", "140 A"); b.pv[13] = b.pe[13] = 140; shot("66_bms_settings_cloud_note"); b.cloudNote[0] = 0;
+    ui::page = PG_BMS_CONFIRM; shot("67_bms_confirm");
+    live(35); shot("67b_bms_confirm_moving"); live(0);
+    b.pe[1] = 0; shot("68_bms_confirm_dsg_off"); b.pe[1] = 1;
+    strcpy(b.msg, "Written and verified OK"); b.msgKind = 1;
+    for (int i = 0; i < 18; i++) b.pv[i] = b.pe[i];
+    ui::page = PG_BMS_SET; shot("69_bms_settings_written"); b.msg[0] = 0;
+    live(42); s.soc = 78;
+    ui::page = PG_DASH; cfg.dash = 0; shot("70a_dash_A_bms_soc"); cfg.dash = 1; shot("70b_dash_B_bms_soc"); cfg.dash = 2; shot("70c_dash_C_bms_soc"); cfg.dash = 0;
+    ui::menuOpen = true; shot("70_menu_bms");
+    b.live.alarms = bms::A_CELL_OV; shot("71_menu_bms_alarm"); b.live.alarms = 0; ui::menuOpen = false;
+  }
   return 0;
 }

@@ -137,7 +137,7 @@ static Vals vals(const UiState &s) {
   fmt1(v.volt, 8, s.live.volt);
   fmt1(v.amp, 8, s.live.amp);
   snprintf(v.kw, sizeof v.kw, T("%.2f"), s.kw);
-  snprintf(v.soc, sizeof v.soc, T("%d%%"), s.soc);
+  snprintf(v.soc, sizeof v.soc, s.bms.link == bms::L_ONLINE && s.bms.have ? T("BMS %d%%") : T("%d%%"), s.soc);
   snprintf(v.tc, sizeof v.tc, T("%d"), s.live.tCtrl);
   snprintf(v.tm, sizeof v.tm, T("%d"), s.live.tMotor);
   return v;
@@ -457,15 +457,17 @@ static void dashC(Gfx &g, const UiState &s, const Settings &c, bool full) {
 }
 
 // ============================================================ MENU ========
-static const char *const MENU[5] = {"STYLE", "DRAG", "LOG", "TUNE", "SETUP"};
+static const char *const MENU[6] = {"STYLE", "DRAG", "LOG", "TUNE", "BMS", "SETUP"};
 static int changedCount(const UiState &s);
+static void icBatt(Gfx &g, int cx, int cy, uint32_t c, uint32_t bg, float f);
+static Btn menuBtn(int i) { return {6 + i * 79, 262, 73, 52}; }
 static void drawMenu(Gfx &g, const UiState &s, const Settings &c) {
   g.fillRect(0, 252, 480, 68, 0x080C11);
   g.fillRect(0, 252, 480, 2, 0x1A2430);
   g.fillRoundRect(216, 255, 48, 3, 1, LINE);  // grab handle
-  static const uint32_t IC[5] = {BLUE, YELLOW, GREEN, 0xFF8A3D, SUB};
-  for (int i = 0; i < 5; i++) {
-    Btn b = {6 + i * 95, 262, 88, 52};
+  static const uint32_t IC[6] = {BLUE, YELLOW, GREEN, 0xFF8A3D, 0x3DDC97, SUB};
+  for (int i = 0; i < 6; i++) {
+    Btn b = menuBtn(i);
     g.fillRoundRect(b.x, b.y, b.w, b.h, 10, 0x121A23);
     g.drawRoundRect(b.x, b.y, b.w, b.h, 10, 0x1E2A36);
     int cx = b.x + b.w / 2, cy = b.y + 16;
@@ -474,14 +476,16 @@ static void drawMenu(Gfx &g, const UiState &s, const Settings &c) {
     case 1: icFlag(g, cx, cy, IC[i]); break;
     case 2: icBars(g, cx, cy, IC[i]); break;
     case 3: icSliders(g, cx, cy, IC[i]); break;
+    case 4: icBatt(g, cx, cy, IC[i], 0x121A23, s.bms.have ? s.bms.live.soc / 100 : 0.6f); break;
     default: icGear(g, cx, cy, IC[i], 0x121A23); break;
     }
     g.text(cx, b.y + 44, i == 0 ? DASH_NAME[c.dash] + 2 : MENU[i], i == 0 ? F10 : F11B, i == 0 ? BLUE : TEXT, AL_C);
-    // little dots: unsaved tune changes / firmware update / cloud not linked yet
+    // little dots: unsaved tune changes / BMS alarm / firmware update / cloud not linked yet
     uint32_t dot = 0;
     if (i == 3 && changedCount(s)) dot = YELLOW;
-    if (i == 4 && s.updAvailable) dot = YELLOW;
-    else if (i == 4 && !s.cloudCfg) dot = BLUE;
+    if (i == 4 && (s.bms.live.alarms || s.bms.link == bms::L_LOST)) dot = RED;
+    if (i == 5 && s.updAvailable) dot = YELLOW;
+    else if (i == 5 && !s.cloudCfg) dot = BLUE;
     if (dot) { g.fillCircle(b.x + b.w - 11, b.y + 10, 5, 0x121A23); g.fillCircle(b.x + b.w - 11, b.y + 10, 4, dot); }
   }
 }
@@ -1363,6 +1367,8 @@ static bool wifiTouch(int x, int y, const UiState &s, UiActions &a) {
   return false;
 }
 
+#include "ui_bms.inc"
+
 // ============================================================ dispatch ====
 void go(Page p) { page = p; menuOpen = false; }
 static void dash(Gfx &g, const UiState &s, const Settings &c, bool full) {
@@ -1562,6 +1568,11 @@ void draw(Gfx &g, const UiState &s, const Settings &c) {
   case PG_WIFI: wifiPage(g, s); break;
   case PG_KEYB: kbPage(g); break;
   case PG_PAIR: pairPage(g, s); pairDrawAt = nowMs; break;
+  case PG_BMS: bmsPage(g, s); break;
+  case PG_BMS_CELLS: cellsPage(g, s); break;
+  case PG_BMS_SET: bmsSetPage(g, s); break;
+  case PG_BMS_CONFIRM: bmsConfirmPage(g, s); break;
+  case PG_BMS_FIND: findPage(g, s); break;
   default: break;
   }
 }
@@ -1578,6 +1589,11 @@ void update(Gfx &g, const UiState &s, const Settings &c) {
     pairDrawAt = nowMs;
     g.boxed(0, 32, 480, 248, BG, [&] { pairBody(g, s); });
     if (nowMs - btnAt > 1000) { btnAt = nowMs; g.boxed(0, 280, 480, 40, BG, [&] { pairButtons(g, s); }); }
+  } else if ((page == PG_BMS || page == PG_BMS_CELLS || page == PG_BMS_FIND) && nowMs - bmsDrawAt > 500) {
+    bmsDrawAt = nowMs;
+    if (page == PG_BMS) g.boxed(0, 32, 480, 248, BG, [&] { if (!s.bms.have) bmsEmpty(g, s); else bmsBody(g, s); });
+    else if (page == PG_BMS_CELLS) g.boxed(0, 32, 480, 248, BG, [&] { cellsBody(g, s); });
+    else g.boxed(0, 32, 480, 248, BG, [&] { findBody(g, s); });
   } else if (page == PG_WIFI && nowMs - wifiDrawAt > 1000) {
     wifiDrawAt = nowMs;
     g.boxed(0, 34, 480, 244, BG, [&] { wifiStatus(g, s); wifiList(g, s); });
@@ -1597,10 +1613,10 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
     if (!menuOpen) { menuOpen = true; menuAt = nowMs; return true; }
     if (y < 256) { menuOpen = false; return true; }
     menuAt = nowMs;
-    for (int i = 0; i < 5; i++)
-      if (hit({6 + i * 95, 264, 88, 48}, x, y)) {
+    for (int i = 0; i < 6; i++)
+      if (hit(menuBtn(i), x, y)) {
         if (i == 0) { c.dash = (c.dash + 1) % 3; a.settingsChanged = true; return true; }
-        go(i == 1 ? PG_DRAG : i == 2 ? PG_LOG : i == 3 ? PG_TUNE : PG_SETUP);
+        go(i == 1 ? PG_DRAG : i == 2 ? PG_LOG : i == 3 ? PG_TUNE : i == 4 ? PG_BMS : PG_SETUP);
         if (i == 3 && !s.params.complete() && !s.busy) a.readParams = true;
         return true;
       }
@@ -1733,6 +1749,7 @@ bool touch(int x, int y, UiState &s, Settings &c, UiActions &a) {
   case PG_WIFI: return wifiTouch(x, y, s, a);
   case PG_PAIR: return pairTouch(x, y, s, a);
   case PG_KEYB: return kbTouch(x, y, a);
+  case PG_BMS: case PG_BMS_CELLS: case PG_BMS_SET: case PG_BMS_CONFIRM: case PG_BMS_FIND: return bmsTouch(x, y, s, a);
   case PG_INFO:
     if (hit(IB_CHECK, x, y)) { if (s.netConnected) a.checkUpdate = true; return true; }
     if (hit(IB_INSTALL, x, y)) { if (s.updAvailable) a.installUpdate = true; return true; }

@@ -5,6 +5,7 @@
 #include "gfx.h"
 #include "ride.h"
 #include "votol_proto.h"
+#include "bms.h"
 
 struct Settings {
   uint8_t dash = 0;         // 0 A Sport Arc, 1 B Digital Race, 2 C Twin Gauge
@@ -110,7 +111,9 @@ struct UiState {
   int bleLeft = 0;                 // seconds left in the pairing window
   bool blePhone = false;           // phone connected over Bluetooth
   bool cloudCfg = false, cloudOk = false;
-  bool uartSwap = false;           // VOTOL TX/RX wires swapped, fixed automatically  // module linked to an account / uploads accepted
+  bool uartSwap = false;           // VOTOL TX/RX wires swapped, fixed automatically
+  // smart BMS over Bluetooth
+  BmsUi bms;
   uint8_t updState = 0;        // ota::State
   int updProgress = 0;
   // info
@@ -127,12 +130,16 @@ struct UiActions {
   bool checkUpdate = false, installUpdate = false, profChanged = false;
   bool wifiScan = false, wifiJoin = false, wifiForget = false;
   bool blePair = false;       // open a Bluetooth pairing window from the screen
+  // smart BMS
+  bool bmsScan = false, bmsForget = false, bmsRead = false, bmsWrite = false;
+  int bmsConnect = -1;        // index into BmsUi::found
   char wifiSsid[33] = "", wifiPass[65] = "";
 };
 
 enum Page : uint8_t {
   PG_BOOT, PG_DASH, PG_DRAG, PG_DRAG_HIST, PG_LOG, PG_GRAPH, PG_FAULTS,
-  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_WIFI, PG_KEYB, PG_PAIR, PG_COUNT
+  PG_TUNE, PG_EDIT, PG_CONFIRM, PG_BACKUPS, PG_SETUP, PG_WHEEL, PG_INFO, PG_LAUNCH, PG_WIFI, PG_KEYB, PG_PAIR,
+  PG_BMS, PG_BMS_CELLS, PG_BMS_SET, PG_BMS_CONFIRM, PG_BMS_FIND, PG_COUNT
 };
 
 namespace ui {
